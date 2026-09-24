@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Генератор обложки 640×360</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    h1 { margin-bottom: 8px; font-size: 24px; }
+    p { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+    canvas {
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      max-width: 100%;
+      height: auto;
+    }
+    .btn {
+      margin-top: 24px;
+      padding: 14px 32px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(59,130,246,0.4);
+    }
+    .btn:active { transform: scale(0.97); }
+    .info {
+      margin-top: 16px;
+      color: #64748b;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>📋 Обложка для Telegram Mini App</h1>
+  <p>Размер: 640 × 360 px</p>
+  <canvas id="cover" width="640" height="360"></canvas>
+  <button class="btn" onclick="download()">⬇️ Скачать PNG</button>
+  <p class="info">Нажмите кнопку, чтобы скачать готовое изображение</p>
+
+  <script>
+    const canvas = document.getElementById('cover');
+    const ctx = canvas.getContext('2d');
+    const W = 640, H = 360;
+
+    // Background gradient
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#1e3a8a');
+    bg.addColorStop(0.5, '#3b82f6');
+    bg.addColorStop(1, '#7c3aed');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Decorative circles
+    function drawCircle(x, y, r, color, alpha) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    drawCircle(80, 60, 120, '#60a5fa', 0.15);
+    drawCircle(560, 300, 150, '#a78bfa', 0.12);
+    drawCircle(500, 80, 80, '#818cf8', 0.1);
+    drawCircle(120, 300, 100, '#38bdf8', 0.1);
+
+    // Grid dots
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#fff';
+    for (let x = 20; x < W; x += 40) {
+      for (let y = 20; y < H; y += 40) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Main card (center)
+    function drawRoundedRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    // Main card shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetY = 10;
+    drawRoundedRect(220, 75, 200, 210, 20);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    // Checklist icon in main card
+    const cx = 320, cy = 155;
+    
+    // Checkmark circle
+    ctx.beginPath();
+    ctx.arc(cx, cy - 20, 22, 0, Math.PI * 2);
+    ctx.fillStyle = '#3b82f6';
+    ctx.fill();
+    
+    // Checkmark
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx - 10, cy - 20);
+    ctx.lineTo(cx - 3, cy - 13);
+    ctx.lineTo(cx + 10, cy - 27);
+    ctx.stroke();
+
+    // Lines representing text
+    ctx.fillStyle = '#e2e8f0';
+    drawRoundedRect(260, cy + 18, 120, 8, 4);
+    ctx.fill();
+    drawRoundedRect(260, cy + 34, 90, 8, 4);
+    ctx.fill();
+    drawRoundedRect(260, cy + 50, 105, 8, 4);
+    ctx.fill();
+
+    // Small floating cards
+    // Left card
+    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetY = 6;
+    drawRoundedRect(95, 120, 110, 70, 14);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    // Priority dot (red)
+    ctx.beginPath();
+    ctx.arc(120, 145, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#ef4444';
+    ctx.fill();
+    ctx.fillStyle = '#cbd5e1';
+    drawRoundedRect(135, 141, 55, 7, 3);
+    ctx.fill();
+    drawRoundedRect(115, 160, 70, 6, 3);
+    ctx.fill();
+
+    // Right card
+    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetY = 6;
+    drawRoundedRect(435, 170, 110, 70, 14);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    // Priority dot (green)
+    ctx.beginPath();
+    ctx.arc(460, 195, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#22c55e';
+    ctx.fill();
+    ctx.fillStyle = '#cbd5e1';
+    drawRoundedRect(475, 191, 55, 7, 3);
+    ctx.fill();
+    drawRoundedRect(455, 210, 70, 6, 3);
+    ctx.fill();
+
+    // Top small card
+    ctx.shadowColor = 'rgba(0,0,0,0.15)';
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetY = 4;
+    drawRoundedRect(150, 40, 90, 50, 12);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    // Star icon
+    ctx.beginPath();
+    ctx.arc(175, 58, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fill();
+    ctx.fillStyle = '#cbd5e1';
+    drawRoundedRect(187, 55, 40, 6, 3);
+    ctx.fill();
+
+    // Bottom small card
+    ctx.shadowColor = 'rgba(0,0,0,0.15)';
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetY = 4;
+    drawRoundedRect(400, 270, 90, 50, 12);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    ctx.beginPath();
+    ctx.arc(425, 288, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#8b5cf6';
+    ctx.fill();
+    ctx.fillStyle = '#cbd5e1';
+    drawRoundedRect(437, 285, 40, 6, 3);
+    ctx.fill();
+
+    // App name
+    ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 10;
+    ctx.fillText('TaskFlow', W / 2, H - 30);
+    ctx.shadowColor = 'transparent';
+
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText('Управление задачами', W / 2, H - 10);
+
+    function download() {
+      const link = document.createElement('a');
+      link.download = 'taskflow-cover-640x360.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+  </script>
+</body>
+</html>
