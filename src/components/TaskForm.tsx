@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Task, Priority, Status, Category } from '../types';
 import { generateId } from '../store';
-import { toLocalISOString } from '../utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trash2, Calendar, Bell, Tag } from 'lucide-react';
 

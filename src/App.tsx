@@ -1,15 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Task, ViewMode, FilterStatus, FilterPriority } from './types';
-import { loadTasks, saveTasks } from './store';
 import { useTelegram } from './useTelegram';
 import { getGreeting } from './utils';
+import { supabase, loadTasks, createTask, updateTask, deleteTask, checkAuth, getUserFamily } from './supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
   List,
   BarChart3,
-  LayoutGrid,
-  Sparkles,
+  Users,
+  LogOut,
+  Copy,
+  Check,
 } from 'lucide-react';
 import TaskCard from './components/TaskCard';
 import TaskForm from './components/TaskForm';
@@ -24,54 +26,76 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [priorityFilter, setPriorityFilter] = useState<FilterPriority>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
+  const [userId, setUserId] = useState<string>('');
+  const [family, setFamily] = useState<any>(null);
+  const [copied, setCopied] = useState(false);
+  
   const { tgUser, hapticFeedback, hapticSuccess } = useTelegram();
 
-  // Load tasks
+  // Проверка авторизации
   useEffect(() => {
-    setTasks(loadTasks());
-  }, []);
+    const init = async () => {
+      const tg = window.Telegram?.WebApp;
+      const telegramUser = tg?.initDataUnsafe?.user;
 
-  // Save tasks whenever they change
-  useEffect(() => {
-    if (tasks.length > 0 || localStorage.getItem('taskflow_tasks')) {
-      saveTasks(tasks);
-    }
-  }, [tasks]);
+      if (!telegramUser) {
+        setIsAllowed(false);
+        setLoading(false);
+        return;
+      }
 
-  // Reminder checker
-  useEffect(() => {
-    const checkReminders = () => {
-      const now = new Date();
-      setTasks(prev => prev.map(task => {
-        if (
-          task.reminderDate &&
-          !task.reminderSent &&
-          task.status !== 'completed' &&
-          task.status !== 'cancelled' &&
-          new Date(task.reminderDate) <= now
-        ) {
-          // Show notification
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('📋 Напоминание: ' + task.title, {
-              body: task.description || 'Время выполнить задачу!',
-            });
-          }
-          // Try Telegram haptic
-          hapticFeedback('heavy');
-          return { ...task, reminderSent: true };
-        }
-        return task;
-      }));
+      const { allowed, profile } = await checkAuth(telegramUser.id);
+      
+      if (!allowed) {
+        setIsAllowed(false);
+        setLoading(false);
+        return;
+      }
+
+      setIsAllowed(true);
+      setUserId(profile.id);
+
+      // Загружаем задачи
+      const userTasks = await loadTasks(profile.id);
+      setTasks(userTasks);
+
+      // Загружаем семью
+      const userFamily = await getUserFamily(profile.id);
+      setFamily(userFamily);
+
+      setLoading(false);
     };
 
-    // Request notification permission
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    init();
+  }, []);
 
-    const interval = setInterval(checkReminders, 30000); // Check every 30 seconds
-    return () => clearInterval(interval);
-  }, [hapticFeedback]);
+  // Realtime подписка на изменения задач
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel('tasks-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+        },
+        async () => {
+          // Перезагружаем задачи при любом изменении
+          const userTasks = await loadTasks(userId);
+          setTasks(userTasks);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   // Filter tasks
   const filteredTasks = tasks.filter(task => {
@@ -88,64 +112,68 @@ export default function App() {
     return true;
   });
 
-  // Sort: active first, then by priority, then by due date
+  // Sort tasks
   const sortedTasks = [...filteredTasks].sort((a, b) => {
-    // Completed/cancelled at the bottom
     const aActive = a.status !== 'completed' && a.status !== 'cancelled' ? 0 : 1;
     const bActive = b.status !== 'completed' && b.status !== 'cancelled' ? 0 : 1;
     if (aActive !== bActive) return aActive - bActive;
 
-    // Priority
     const priorityOrder = { high: 0, medium: 1, low: 2 };
     if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
       return priorityOrder[a.priority] - priorityOrder[b.priority];
     }
 
-    // Due date
     if (a.dueDate && b.dueDate) {
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     }
     if (a.dueDate) return -1;
     if (b.dueDate) return 1;
 
-    // Created date
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const handleSaveTask = useCallback((task: Task) => {
-    setTasks(prev => {
-      const existing = prev.findIndex(t => t.id === task.id);
-      if (existing >= 0) {
-        const updated = [...prev];
-        updated[existing] = task;
-        return updated;
-      }
-      return [task, ...prev];
-    });
+  const handleSaveTask = useCallback(async (task: Task) => {
+    if (editingTask) {
+      await updateTask(task.id, task);
+    } else {
+      await createTask(userId, task);
+    }
+    
+    // Перезагружаем задачи
+    const userTasks = await loadTasks(userId);
+    setTasks(userTasks);
+    
     setShowForm(false);
     setEditingTask(null);
     hapticSuccess();
-  }, [hapticSuccess]);
+  }, [userId, editingTask, hapticSuccess]);
 
-  const handleDeleteTask = useCallback((id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+  const handleDeleteTask = useCallback(async (id: string) => {
+    await deleteTask(id);
+    
+    const userTasks = await loadTasks(userId);
+    setTasks(userTasks);
+    
     setShowForm(false);
     setEditingTask(null);
     hapticFeedback('medium');
-  }, [hapticFeedback]);
+  }, [userId, hapticFeedback]);
 
-  const handleToggleStatus = useCallback((id: string) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== id) return t;
-      const nextStatus = t.status === 'completed' ? 'new' : 'completed';
-      return {
-        ...t,
-        status: nextStatus,
-        completedAt: nextStatus === 'completed' ? new Date().toISOString() : null,
-      };
-    }));
+  const handleToggleStatus = useCallback(async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    const nextStatus = task.status === 'completed' ? 'new' : 'completed';
+    await updateTask(id, {
+      status: nextStatus,
+      completedAt: nextStatus === 'completed' ? new Date().toISOString() : null,
+    });
+
+    const userTasks = await loadTasks(userId);
+    setTasks(userTasks);
+    
     hapticSuccess();
-  }, [hapticSuccess]);
+  }, [tasks, userId, hapticSuccess]);
 
   const handleEditTask = useCallback((task: Task) => {
     setEditingTask(task);
@@ -157,7 +185,45 @@ export default function App() {
     setShowForm(true);
   };
 
+  const handleCopyInviteCode = () => {
+    if (family?.families?.invite_code) {
+      navigator.clipboard.writeText(family.families.invite_code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      hapticSuccess();
+    }
+  };
+
   const activeCount = tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled').length;
+
+  // Экран загрузки
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="text-6xl mb-4 animate-pulse">📋</div>
+          <p className="text-gray-500">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Экран доступа запрещён
+  if (!isAllowed) {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-50 px-6">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Доступ запрещён</h1>
+          <p className="text-gray-500">
+            У вас нет доступа к этому приложению.
+            <br />
+            Обратитесь к администратору.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -176,6 +242,7 @@ export default function App() {
             {[
               { mode: 'list' as ViewMode, icon: List },
               { mode: 'stats' as ViewMode, icon: BarChart3 },
+              { mode: 'board' as ViewMode, icon: Users },
             ].map(({ mode, icon: Icon }) => (
               <button
                 key={mode}
@@ -189,6 +256,33 @@ export default function App() {
             ))}
           </div>
         </div>
+
+        {/* Family info */}
+        {family && viewMode === 'board' && (
+          <div className="mt-3 p-3 bg-blue-50 rounded-xl">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-gray-900">👨‍👩‍👧 Семья: {family.families.name}</h3>
+              <button
+                onClick={handleCopyInviteCode}
+                className="flex items-center gap-1 px-3 py-1 bg-white rounded-lg text-sm font-medium text-blue-600"
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? 'Скопировано' : 'Код'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mb-2">
+              Код приглашения: <span className="font-mono font-bold">{family.families.invite_code}</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {family.families.family_members?.map((member: any) => (
+                <div key={member.user_id} className="flex items-center gap-1 px-2 py-1 bg-white rounded-lg text-xs">
+                  <span>{member.profiles.first_name}</span>
+                  {member.role === 'owner' && <span className="text-yellow-600">⭐</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
