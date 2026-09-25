@@ -235,20 +235,20 @@ export async function checkAccess(telegramId: number): Promise<boolean> {
       console.error('❌ Ошибка получения всех пользователей:', allError);
     }
     
-    // Теперь ищем конкретного пользователя
+    // Теперь ищем конкретного пользователя (без .single())
     const { data, error } = await supabase
       .from('allowed_users')
       .select('telegram_id')
-      .eq('telegram_id', telegramId)
-      .single();
+      .eq('telegram_id', telegramId);
 
-    console.log('🔍 Найден пользователь:', data);
+    console.log('🔍 Найденные пользователи:', data);
     if (error) {
       console.error('❌ Ошибка запроса allowed_users:', error);
       return false;
     }
 
-    if (data) {
+    const hasAccess = data && data.length > 0;
+    if (hasAccess) {
       console.log('✅ Пользователь найден в whitelist');
       return true;
     } else {
