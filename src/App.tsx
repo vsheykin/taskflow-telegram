@@ -2,16 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { Task, ViewMode, FilterStatus, FilterPriority } from './types';
 import { useTelegram } from './useTelegram';
 import { getGreeting } from './utils';
-import { supabase, loadTasks, createTask, updateTask, deleteTask, checkAuth, getUserFamily } from './supabase';
+import { loadTasks, createTask, updateTask, deleteTask, isSupabaseConfigured, supabase } from './supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
   List,
   BarChart3,
   Users,
-  LogOut,
-  Copy,
-  Check,
+  Cloud,
+  Smartphone,
+  Info,
 } from 'lucide-react';
 import TaskCard from './components/TaskCard';
 import TaskForm from './components/TaskForm';
@@ -27,55 +27,37 @@ export default function App() {
   const [priorityFilter, setPriorityFilter] = useState<FilterPriority>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
   const [userId, setUserId] = useState<string>('');
-  const [family, setFamily] = useState<any>(null);
-  const [copied, setCopied] = useState(false);
-  
+  const [showSyncInfo, setShowSyncInfo] = useState(false);
+
   const { tgUser, hapticFeedback, hapticSuccess } = useTelegram();
 
-  // Проверка авторизации
+  // Инициализация
   useEffect(() => {
     const init = async () => {
+      // Получаем Telegram user ID
       const tg = window.Telegram?.WebApp;
       const telegramUser = tg?.initDataUnsafe?.user;
 
-      if (!telegramUser) {
-        setIsAllowed(false);
-        setLoading(false);
-        return;
+      if (telegramUser) {
+        setUserId(String(telegramUser.id));
       }
-
-      const { allowed, profile } = await checkAuth(telegramUser.id);
-      
-      if (!allowed) {
-        setIsAllowed(false);
-        setLoading(false);
-        return;
-      }
-
-      setIsAllowed(true);
-      setUserId(profile.id);
 
       // Загружаем задачи
-      const userTasks = await loadTasks(profile.id);
+      const userTasks = await loadTasks(userId || undefined);
       setTasks(userTasks);
-
-      // Загружаем семью
-      const userFamily = await getUserFamily(profile.id);
-      setFamily(userFamily);
-
       setLoading(false);
     };
 
     init();
   }, []);
 
-  // Realtime подписка на изменения задач
+  // Realtime подписка на изменения задач (только если Supabase настроен)
   useEffect(() => {
-    if (!userId) return;
+    if (!isSupabaseConfigured || !supabase) return;
 
-    const channel = supabase
+    const sb = supabase; // TypeScript guard
+    const channel = sb
       .channel('tasks-changes')
       .on(
         'postgres_changes',
@@ -85,15 +67,14 @@ export default function App() {
           table: 'tasks',
         },
         async () => {
-          // Перезагружаем задачи при любом изменении
-          const userTasks = await loadTasks(userId);
+          const userTasks = await loadTasks(userId || undefined);
           setTasks(userTasks);
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      sb.removeChannel(channel);
     };
   }, [userId]);
 
@@ -136,13 +117,12 @@ export default function App() {
     if (editingTask) {
       await updateTask(task.id, task);
     } else {
-      await createTask(userId, task);
+      await createTask(userId || undefined, task);
     }
-    
-    // Перезагружаем задачи
-    const userTasks = await loadTasks(userId);
+
+    const userTasks = await loadTasks(userId || undefined);
     setTasks(userTasks);
-    
+
     setShowForm(false);
     setEditingTask(null);
     hapticSuccess();
@@ -150,10 +130,10 @@ export default function App() {
 
   const handleDeleteTask = useCallback(async (id: string) => {
     await deleteTask(id);
-    
-    const userTasks = await loadTasks(userId);
+
+    const userTasks = await loadTasks(userId || undefined);
     setTasks(userTasks);
-    
+
     setShowForm(false);
     setEditingTask(null);
     hapticFeedback('medium');
@@ -169,9 +149,9 @@ export default function App() {
       completedAt: nextStatus === 'completed' ? new Date().toISOString() : null,
     });
 
-    const userTasks = await loadTasks(userId);
+    const userTasks = await loadTasks(userId || undefined);
     setTasks(userTasks);
-    
+
     hapticSuccess();
   }, [tasks, userId, hapticSuccess]);
 
@@ -185,15 +165,6 @@ export default function App() {
     setShowForm(true);
   };
 
-  const handleCopyInviteCode = () => {
-    if (family?.families?.invite_code) {
-      navigator.clipboard.writeText(family.families.invite_code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      hapticSuccess();
-    }
-  };
-
   const activeCount = tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled').length;
 
   // Экран загрузки
@@ -203,23 +174,6 @@ export default function App() {
         <div className="text-center">
           <div className="text-6xl mb-4 animate-pulse">📋</div>
           <p className="text-gray-500">Загрузка...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Экран доступа запрещён
-  if (!isAllowed) {
-    return (
-      <div className="h-full flex items-center justify-center bg-gray-50 px-6">
-        <div className="text-center">
-          <div className="text-6xl mb-4">🔒</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Доступ запрещён</h1>
-          <p className="text-gray-500">
-            У вас нет доступа к этому приложению.
-            <br />
-            Обратитесь к администратору.
-          </p>
         </div>
       </div>
     );
@@ -238,51 +192,65 @@ export default function App() {
               {activeCount > 0 ? `${activeCount} активных задач` : 'Все задачи выполнены! 🎉'}
             </p>
           </div>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
-            {[
-              { mode: 'list' as ViewMode, icon: List },
-              { mode: 'stats' as ViewMode, icon: BarChart3 },
-              { mode: 'board' as ViewMode, icon: Users },
-            ].map(({ mode, icon: Icon }) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={`p-2 rounded-lg transition-all ${
-                  viewMode === mode ? 'bg-white shadow-sm text-blue-500' : 'text-gray-400'
-                }`}
-              >
-                <Icon size={18} />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Family info */}
-        {family && viewMode === 'board' && (
-          <div className="mt-3 p-3 bg-blue-50 rounded-xl">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold text-gray-900">👨‍👩‍👧 Семья: {family.families.name}</h3>
-              <button
-                onClick={handleCopyInviteCode}
-                className="flex items-center gap-1 px-3 py-1 bg-white rounded-lg text-sm font-medium text-blue-600"
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-                {copied ? 'Скопировано' : 'Код'}
-              </button>
-            </div>
-            <p className="text-xs text-gray-600 mb-2">
-              Код приглашения: <span className="font-mono font-bold">{family.families.invite_code}</span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {family.families.family_members?.map((member: any) => (
-                <div key={member.user_id} className="flex items-center gap-1 px-2 py-1 bg-white rounded-lg text-xs">
-                  <span>{member.profiles.first_name}</span>
-                  {member.role === 'owner' && <span className="text-yellow-600">⭐</span>}
-                </div>
+          <div className="flex items-center gap-1">
+            {/* Sync indicator */}
+            <button
+              onClick={() => setShowSyncInfo(!showSyncInfo)}
+              className={`p-2 rounded-lg transition-all ${
+                isSupabaseConfigured ? 'text-green-500' : 'text-gray-400'
+              }`}
+            >
+              {isSupabaseConfigured ? <Cloud size={18} /> : <Smartphone size={18} />}
+            </button>
+            <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+              {[
+                { mode: 'list' as ViewMode, icon: List },
+                { mode: 'stats' as ViewMode, icon: BarChart3 },
+              ].map(({ mode, icon: Icon }) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`p-2 rounded-lg transition-all ${
+                    viewMode === mode ? 'bg-white shadow-sm text-blue-500' : 'text-gray-400'
+                  }`}
+                >
+                  <Icon size={18} />
+                </button>
               ))}
             </div>
           </div>
-        )}
+        </div>
+
+        {/* Sync info banner */}
+        <AnimatePresence>
+          {showSyncInfo && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className={`mt-2 p-3 rounded-xl flex items-start gap-2 ${
+                isSupabaseConfigured ? 'bg-green-50' : 'bg-yellow-50'
+              }`}>
+                <Info size={16} className={isSupabaseConfigured ? 'text-green-600 mt-0.5' : 'text-yellow-600 mt-0.5'} />
+                <div className="text-xs">
+                  {isSupabaseConfigured ? (
+                    <>
+                      <p className="font-semibold text-green-800">☁️ Облачная синхронизация</p>
+                      <p className="text-green-700">Задачи синхронизируются между всеми устройствами в реальном времени</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-yellow-800">📱 Локальный режим</p>
+                      <p className="text-yellow-700">Задачи сохраняются только на этом устройстве. Для синхронизации настройте Supabase (см. SETUP_GUIDE.md)</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Content */}
