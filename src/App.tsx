@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Task, ViewMode, FilterStatus, FilterPriority } from './types';
 import { useTelegram } from './useTelegram';
 import { getGreeting } from './utils';
-import { loadTasks, createTask, updateTask, deleteTask, isSupabaseConfigured, supabase } from './supabase';
+import { loadTasks, createTask, updateTask, deleteTask, isSupabaseConfigured, supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
@@ -174,6 +174,89 @@ export default function App() {
         <div className="text-center">
           <div className="text-6xl mb-4 animate-pulse">📋</div>
           <p className="text-gray-500">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Экран диагностики (если Supabase не настроен)
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="h-full overflow-y-auto bg-gray-50 p-5">
+        <div className="max-w-md mx-auto">
+          <div className="text-center mb-6">
+            <div className="text-6xl mb-3">⚠️</div>
+            <h1 className="text-xl font-bold text-gray-900 mb-2">Supabase не подключён</h1>
+            <p className="text-sm text-gray-500">Приложение работает в локальном режиме</p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-200 mb-4">
+            <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <span className="text-yellow-500">🔍</span> Диагностика
+            </h2>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <span className="text-gray-600">VITE_SUPABASE_URL:</span>
+                <span className={`font-mono text-xs ${supabaseUrl ? 'text-green-600' : 'text-red-600'}`}>
+                  {supabaseUrl ? '✅ ' + supabaseUrl.substring(0, 25) + '...' : '❌ НЕ УСТАНОВЛЕН'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <span className="text-gray-600">VITE_SUPABASE_ANON_KEY:</span>
+                <span className={`font-mono text-xs ${supabaseAnonKey ? 'text-green-600' : 'text-red-600'}`}>
+                  {supabaseAnonKey ? '✅ SET' : '❌ НЕ УСТАНОВЛЕН'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-gray-600">Режим:</span>
+                <span className="font-mono text-xs text-orange-600">📱 ЛОКАЛЬНЫЙ</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
+            <h2 className="font-semibold text-gray-900 mb-3">📋 Что делать:</h2>
+            <ol className="space-y-3 text-sm text-gray-700">
+              <li className="flex gap-2">
+                <span className="font-bold text-blue-500">1.</span>
+                <span>Откройте <b>Supabase Dashboard</b> → Settings → API</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-blue-500">2.</span>
+                <span>Скопируйте <b>Project URL</b> и <b>anon public key</b></span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-blue-500">3.</span>
+                <span>Откройте файл <code className="bg-gray-100 px-1 rounded">.env</code> в корне проекта</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-blue-500">4.</span>
+                <div>
+                  <span>Вставьте значения без кавычек и пробелов:</span>
+                  <pre className="mt-1 bg-gray-900 text-green-400 p-2 rounded text-xs overflow-x-auto">
+{`VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGc...`}
+                  </pre>
+                </div>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-blue-500">5.</span>
+                <span>Закоммитьте и запушьте:</span>
+              </li>
+            </ol>
+            <pre className="mt-2 bg-gray-900 text-green-400 p-3 rounded text-xs overflow-x-auto">
+{`git add -f .env
+git commit -m "Fix Supabase config"
+git push origin main`}
+            </pre>
+          </div>
+
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-3 bg-blue-500 text-white rounded-xl font-medium"
+          >
+            🔄 Обновить страницу
+          </button>
         </div>
       </div>
     );
