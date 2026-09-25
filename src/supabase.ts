@@ -1,20 +1,30 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Task } from './types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Читаем ВСЕ переменные окружения для диагностики
+const allEnvVars = Object.keys(import.meta.env).filter(k => k.startsWith('VITE_'));
+console.log('[TaskFlow] === DIAGNOSTIC START ===');
+console.log('[TaskFlow] All VITE_ env vars found:', allEnvVars);
+console.log('[TaskFlow] import.meta.env keys:', Object.keys(import.meta.env));
+
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+console.log('[TaskFlow] VITE_SUPABASE_URL raw value:', JSON.stringify(import.meta.env.VITE_SUPABASE_URL));
+console.log('[TaskFlow] VITE_SUPABASE_ANON_KEY raw value:', import.meta.env.VITE_SUPABASE_ANON_KEY ? JSON.stringify(import.meta.env.VITE_SUPABASE_ANON_KEY.substring(0, 30) + '...') : 'undefined');
+console.log('[TaskFlow] supabaseUrl after fallback:', JSON.stringify(supabaseUrl));
+console.log('[TaskFlow] supabaseUrl length:', supabaseUrl.length);
 
 // Флаг: Supabase настроен?
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+console.log('[TaskFlow] isSupabaseConfigured:', isSupabaseConfigured);
+console.log('[TaskFlow] === DIAGNOSTIC END ===');
 
 // Создаём клиент только если настроен
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
-
-console.log('[TaskFlow] Supabase configured:', isSupabaseConfigured);
-console.log('[TaskFlow] Supabase URL:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'NOT SET');
-console.log('[TaskFlow] Supabase Key:', supabaseAnonKey ? 'SET (' + supabaseAnonKey.substring(0, 20) + '...)' : 'NOT SET');
 
 // ====== LOCAL STORAGE FALLBACK ======
 const STORAGE_KEY = 'taskflow_tasks';
