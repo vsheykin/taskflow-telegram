@@ -1,25 +1,15 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Task } from './types';
 
-// Читаем ВСЕ переменные окружения для диагностики
-const allEnvVars = Object.keys(import.meta.env).filter(k => k.startsWith('VITE_'));
-console.log('[TaskFlow] === DIAGNOSTIC START ===');
-console.log('[TaskFlow] All VITE_ env vars found:', allEnvVars);
-console.log('[TaskFlow] import.meta.env keys:', Object.keys(import.meta.env));
-
-export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-console.log('[TaskFlow] VITE_SUPABASE_URL raw value:', JSON.stringify(import.meta.env.VITE_SUPABASE_URL));
-console.log('[TaskFlow] VITE_SUPABASE_ANON_KEY raw value:', import.meta.env.VITE_SUPABASE_ANON_KEY ? JSON.stringify(import.meta.env.VITE_SUPABASE_ANON_KEY.substring(0, 30) + '...') : 'undefined');
-console.log('[TaskFlow] supabaseUrl after fallback:', JSON.stringify(supabaseUrl));
-console.log('[TaskFlow] supabaseUrl length:', supabaseUrl.length);
+// Supabase credentials (hardcoded for reliability)
+export const supabaseUrl = 'https://fgyyzyruhwdbvzvtojoy.supabase.co';
+export const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZneXl6eXJ1aHdkYnZ6dnRvam95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNzg2MTksImV4cCI6MjEwNTg1NDYxOX0.mLbiw3OYP-4TL6WlVp6GS8-EXOK0fekLyktedoj_7vs';
 
 // Флаг: Supabase настроен?
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-console.log('[TaskFlow] isSupabaseConfigured:', isSupabaseConfigured);
-console.log('[TaskFlow] === DIAGNOSTIC END ===');
+console.log('[TaskFlow] ✅ Supabase configured:', isSupabaseConfigured);
+console.log('[TaskFlow] ✅ Supabase URL:', supabaseUrl);
 
 // Создаём клиент только если настроен
 export const supabase: SupabaseClient | null = isSupabaseConfigured
