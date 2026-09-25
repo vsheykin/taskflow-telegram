@@ -434,7 +434,7 @@ export default function App() {
                   {family.families?.family_members?.map((member: any) => (
                     <div key={member.user_id} className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg text-sm shadow-sm">
                       <span className="font-medium text-gray-900">
-                        {member.profiles?.first_name || 'Участник'}
+                        👤 {member.user_id}
                       </span>
                       {member.role === 'owner' && <span className="text-yellow-500 text-xs">⭐</span>}
                     </div>

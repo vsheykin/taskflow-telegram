@@ -383,32 +383,59 @@ export async function getUserFamily(userId: string): Promise<any> {
 
   try {
     console.log('📤 Запрашиваю данные семьи...');
-    const { data, error } = await supabase
+    
+    // Сначала находим семью пользователя
+    const { data: memberData, error: memberError } = await supabase
       .from('family_members')
-      .select(`
-        family_id,
-        role,
-        families (
-          id,
-          name,
-          invite_code,
-          family_members (
-            user_id,
-            role,
-            profiles (telegram_id, first_name, last_name, username)
-          )
-        )
-      `)
+      .select('family_id, role')
       .eq('user_id', userId)
       .single();
 
-    if (error) {
-      console.error('❌ Ошибка запроса семьи:', error);
+    if (memberError || !memberData) {
+      console.log('❌ Пользователь не в семье:', memberError);
       return null;
     }
 
-    console.log('✅ Данные семьи получены:', data);
-    return data;
+    console.log('📋 Пользователь в семье:', memberData);
+
+    // Теперь получаем данные семьи
+    const { data: familyData, error: familyError } = await supabase
+      .from('families')
+      .select('id, name, invite_code')
+      .eq('id', memberData.family_id)
+      .single();
+
+    if (familyError || !familyData) {
+      console.error('❌ Ошибка получения семьи:', familyError);
+      return null;
+    }
+
+    console.log('📋 Данные семьи:', familyData);
+
+    // Получаем всех участников семьи
+    const { data: membersData, error: membersError } = await supabase
+      .from('family_members')
+      .select('user_id, role')
+      .eq('family_id', memberData.family_id);
+
+    if (membersError) {
+      console.error('❌ Ошибка получения участников:', membersError);
+    }
+
+    console.log('📋 Участники семьи:', membersData);
+
+    // Формируем результат
+    const result = {
+      family_id: memberData.family_id,
+      role: memberData.role,
+      families: {
+        ...familyData,
+        family_members: membersData || [],
+      },
+    };
+
+    console.log('✅ Данные семьи получены:', result);
+    return result;
   } catch (err) {
     console.error('❌ Ошибка в getUserFamily:', err);
     return null;
