@@ -212,6 +212,69 @@ export async function deleteTask(taskId: string): Promise<boolean> {
   }
 }
 
+// ====== ACCESS CONTROL FUNCTIONS ======
+
+export async function checkAccess(telegramId: number): Promise<boolean> {
+  console.log('🔵 checkAccess вызвана с telegramId:', telegramId);
+  
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('❌ Supabase не настроен, разрешаю доступ');
+    return true; // Если Supabase не настроен, разрешаем доступ
+  }
+
+  try {
+    console.log('📤 Проверяю таблицу allowed_users...');
+    const { data, error } = await supabase
+      .from('allowed_users')
+      .select('telegram_id')
+      .eq('telegram_id', telegramId)
+      .single();
+
+    if (error) {
+      console.error('❌ Ошибка запроса allowed_users:', error);
+      return false;
+    }
+
+    if (data) {
+      console.log('✅ Пользователь найден в whitelist');
+      return true;
+    } else {
+      console.log('❌ Пользователь не найден в whitelist');
+      return false;
+    }
+  } catch (err) {
+    console.error('❌ Ошибка в checkAccess:', err);
+    return false;
+  }
+}
+
+export async function addUserToWhitelist(telegramId: number): Promise<boolean> {
+  console.log('🔵 addUserToWhitelist вызвана с telegramId:', telegramId);
+  
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('❌ Supabase не настроен');
+    return false;
+  }
+
+  try {
+    console.log('📤 Добавляю пользователя в allowed_users...');
+    const { error } = await supabase
+      .from('allowed_users')
+      .insert({ telegram_id: telegramId });
+
+    if (error) {
+      console.error('❌ Ошибка добавления в whitelist:', error);
+      return false;
+    }
+
+    console.log('✅ Пользователь добавлен в whitelist');
+    return true;
+  } catch (err) {
+    console.error('❌ Ошибка в addUserToWhitelist:', err);
+    return false;
+  }
+}
+
 // ====== FAMILY FUNCTIONS ======
 
 export async function createFamily(userId: string, name: string): Promise<{ familyId: string; inviteCode: string } | null> {
