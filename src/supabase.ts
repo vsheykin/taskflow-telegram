@@ -215,11 +215,18 @@ export async function deleteTask(taskId: string): Promise<boolean> {
 // ====== FAMILY FUNCTIONS ======
 
 export async function createFamily(userId: string, name: string): Promise<{ familyId: string; inviteCode: string } | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
+  console.log('🔵 createFamily вызвана с userId:', userId, 'name:', name);
+  
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('❌ Supabase не настроен');
+    return null;
+  }
 
   const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+  console.log('📝 Сгенерирован код:', inviteCode);
 
   try {
+    console.log('📤 Вставляю в таблицу families...');
     const { data, error } = await supabase
       .from('families')
       .insert({
@@ -230,18 +237,30 @@ export async function createFamily(userId: string, name: string): Promise<{ fami
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Ошибка вставки в families:', error);
+      throw error;
+    }
+
+    console.log('✅ Семья создана:', data);
 
     // Добавляем создателя как owner
-    await supabase.from('family_members').insert({
+    console.log('📤 Добавляю пользователя в family_members...');
+    const { error: memberError } = await supabase.from('family_members').insert({
       family_id: data.id,
       user_id: userId,
       role: 'owner',
     });
 
+    if (memberError) {
+      console.error('❌ Ошибка вставки в family_members:', memberError);
+      throw memberError;
+    }
+
+    console.log('✅ Пользователь добавлен как owner');
     return { familyId: data.id, inviteCode: data.invite_code };
   } catch (err) {
-    console.error('Error creating family:', err);
+    console.error('❌ Ошибка в createFamily:', err);
     return null;
   }
 }
@@ -279,10 +298,16 @@ export async function joinFamily(userId: string, inviteCode: string): Promise<bo
 }
 
 export async function getUserFamily(userId: string): Promise<any> {
-  if (!isSupabaseConfigured || !supabase) return null;
+  console.log('🔵 getUserFamily вызвана с userId:', userId);
+  
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('❌ Supabase не настроен');
+    return null;
+  }
 
   try {
-    const { data } = await supabase
+    console.log('📤 Запрашиваю данные семьи...');
+    const { data, error } = await supabase
       .from('family_members')
       .select(`
         family_id,
@@ -301,9 +326,15 @@ export async function getUserFamily(userId: string): Promise<any> {
       .eq('user_id', userId)
       .single();
 
+    if (error) {
+      console.error('❌ Ошибка запроса семьи:', error);
+      return null;
+    }
+
+    console.log('✅ Данные семьи получены:', data);
     return data;
   } catch (err) {
-    console.error('Error getting user family:', err);
+    console.error('❌ Ошибка в getUserFamily:', err);
     return null;
   }
 }

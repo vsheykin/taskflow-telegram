@@ -181,28 +181,85 @@ export default function App() {
   };
 
   const handleCreateFamily = async () => {
-    if (!familyName.trim() || !userId) return;
-    const result = await createFamily(userId, familyName.trim());
-    if (result) {
-      const userFamily = await getUserFamily(userId);
-      setFamily(userFamily);
-      setShowFamilyForm(false);
-      setFamilyName('');
-      hapticSuccess();
+    console.log('🔵 handleCreateFamily вызвана');
+    console.log('familyName:', familyName);
+    console.log('userId:', userId);
+    
+    if (!familyName.trim()) {
+      console.log('❌ familyName пустой');
+      alert('Введите название семьи');
+      return;
+    }
+    
+    if (!userId) {
+      console.log('❌ userId пустой');
+      alert('Ошибка: пользователь не определён');
+      return;
+    }
+    
+    try {
+      console.log('✅ Вызываю createFamily...');
+      const result = await createFamily(userId, familyName.trim());
+      console.log('📦 Результат createFamily:', result);
+      
+      if (result) {
+        console.log('✅ Семья создана, загружаю данные...');
+        const userFamily = await getUserFamily(userId);
+        console.log('👨‍👩‍👧 Данные семьи:', userFamily);
+        setFamily(userFamily);
+        setShowFamilyForm(false);
+        setFamilyName('');
+        hapticSuccess();
+        alert('Семья создана!');
+      } else {
+        console.log('❌ createFamily вернул null');
+        alert('Ошибка при создании семьи');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка в handleCreateFamily:', error);
+      alert('Произошла ошибка: ' + error);
     }
   };
 
   const handleJoinFamily = async () => {
-    if (!inviteCode.trim() || !userId) return;
-    const success = await joinFamily(userId, inviteCode.trim().toUpperCase());
-    if (success) {
-      const userFamily = await getUserFamily(userId);
-      setFamily(userFamily);
-      setShowFamilyForm(false);
-      setInviteCode('');
-      hapticSuccess();
-    } else {
-      hapticFeedback('medium');
+    console.log('🔵 handleJoinFamily вызвана');
+    console.log('inviteCode:', inviteCode);
+    console.log('userId:', userId);
+    
+    if (!inviteCode.trim()) {
+      console.log('❌ inviteCode пустой');
+      alert('Введите код приглашения');
+      return;
+    }
+    
+    if (!userId) {
+      console.log('❌ userId пустой');
+      alert('Ошибка: пользователь не определён');
+      return;
+    }
+    
+    try {
+      console.log('✅ Вызываю joinFamily...');
+      const success = await joinFamily(userId, inviteCode.trim().toUpperCase());
+      console.log('📦 Результат joinFamily:', success);
+      
+      if (success) {
+        console.log('✅ Присоединился, загружаю данные...');
+        const userFamily = await getUserFamily(userId);
+        console.log('👨‍👩‍👧 Данные семьи:', userFamily);
+        setFamily(userFamily);
+        setShowFamilyForm(false);
+        setInviteCode('');
+        hapticSuccess();
+        alert('Вы присоединились к семье!');
+      } else {
+        console.log('❌ joinFamily вернул false');
+        alert('Неверный код приглашения или ошибка');
+        hapticFeedback('medium');
+      }
+    } catch (error) {
+      console.error('❌ Ошибка в handleJoinFamily:', error);
+      alert('Произошла ошибка: ' + error);
     }
   };
 
