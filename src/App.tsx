@@ -3,7 +3,7 @@ import { Task, ViewMode, FilterStatus, FilterPriority } from './types';
 import { useTelegram } from './useTelegram';
 import { getGreeting } from './utils';
 import { loadTasks, createTask, updateTask, deleteTask, isSupabaseConfigured, supabase } from './supabase';
-import { createFamily, joinFamily, getUserFamily } from './supabase';
+import { createFamily, joinFamily, getUserFamily, checkAccess, addUserToWhitelist } from './supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
@@ -32,6 +32,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
   const [showSyncInfo, setShowSyncInfo] = useState(false);
+  const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
   const [family, setFamily] = useState<any>(null);
   const [showFamilyForm, setShowFamilyForm] = useState(false);
   const [familyName, setFamilyName] = useState('');
@@ -43,22 +44,42 @@ export default function App() {
   // Инициализация
   useEffect(() => {
     const init = async () => {
+      console.log('🚀 Инициализация приложения...');
+      
       // Получаем Telegram user ID
       const tg = window.Telegram?.WebApp;
       const telegramUser = tg?.initDataUnsafe?.user;
 
+      console.log('👤 Telegram пользователь:', telegramUser);
+
       if (telegramUser) {
-        setUserId(String(telegramUser.id));
-      }
+        const telegramId = telegramUser.id;
+        setUserId(String(telegramId));
 
-      // Загружаем задачи
-      const userTasks = await loadTasks(userId || undefined);
-      setTasks(userTasks);
+        // Проверяем доступ
+        console.log('🔐 Проверяю доступ для telegramId:', telegramId);
+        const hasAccess = await checkAccess(telegramId);
+        console.log('🔐 Результат проверки доступа:', hasAccess);
+        
+        setIsAllowed(hasAccess);
 
-      // Загружаем семью
-      if (userId) {
-        const userFamily = await getUserFamily(userId);
+        if (!hasAccess) {
+          console.log('❌ Доступ запрещён');
+          setLoading(false);
+          return;
+        }
+
+        // Загружаем задачи
+        console.log('✅ Доступ разрешён, загружаю задачи...');
+        const userTasks = await loadTasks(String(telegramId));
+        setTasks(userTasks);
+
+        // Загружаем семью
+        const userFamily = await getUserFamily(String(telegramId));
         setFamily(userFamily);
+      } else {
+        console.log('⚠️ Telegram пользователь не определён, разрешаю доступ');
+        setIsAllowed(true); // Если нет Telegram, разрешаем доступ (для тестирования)
       }
 
       setLoading(false);
@@ -281,6 +302,30 @@ export default function App() {
         <div className="text-center">
           <div className="text-6xl mb-4 animate-pulse">📋</div>
           <p className="text-gray-500">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Экран доступа запрещён
+  if (isAllowed === false) {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-50 p-5">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-red-100 text-center">
+            <div className="text-6xl mb-4">🔒</div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Доступ запрещён</h1>
+            <p className="text-gray-600 mb-4">
+              У вас нет доступа к этому приложению. Обратитесь к администратору для получения доступа.
+            </p>
+            <div className="bg-gray-50 rounded-xl p-4 mb-4">
+              <p className="text-sm text-gray-500 mb-2">Ваш Telegram ID:</p>
+              <p className="font-mono text-lg font-bold text-gray-900">{userId}</p>
+            </div>
+            <p className="text-xs text-gray-400">
+              Отправьте этот ID администратору для добавления в список разрешённых пользователей
+            </p>
+          </div>
         </div>
       </div>
     );
