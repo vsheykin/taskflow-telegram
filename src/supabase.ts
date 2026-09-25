@@ -215,7 +215,7 @@ export async function deleteTask(taskId: string): Promise<boolean> {
 // ====== ACCESS CONTROL FUNCTIONS ======
 
 export async function checkAccess(telegramId: number): Promise<boolean> {
-  console.log('🔵 checkAccess вызвана с telegramId:', telegramId);
+  console.log('🔵 checkAccess вызвана с telegramId:', telegramId, 'тип:', typeof telegramId);
   
   if (!isSupabaseConfigured || !supabase) {
     console.log('❌ Supabase не настроен, разрешаю доступ');
@@ -224,12 +224,25 @@ export async function checkAccess(telegramId: number): Promise<boolean> {
 
   try {
     console.log('📤 Проверяю таблицу allowed_users...');
+    
+    // Сначала получаем ВСЕ записи для диагностики
+    const { data: allUsers, error: allError } = await supabase
+      .from('allowed_users')
+      .select('telegram_id');
+    
+    console.log('📋 Все пользователи в whitelist:', allUsers);
+    if (allError) {
+      console.error('❌ Ошибка получения всех пользователей:', allError);
+    }
+    
+    // Теперь ищем конкретного пользователя
     const { data, error } = await supabase
       .from('allowed_users')
       .select('telegram_id')
       .eq('telegram_id', telegramId)
       .single();
 
+    console.log('🔍 Найден пользователь:', data);
     if (error) {
       console.error('❌ Ошибка запроса allowed_users:', error);
       return false;
