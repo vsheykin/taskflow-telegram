@@ -298,10 +298,38 @@ export async function createFamily(userId: string, name: string): Promise<{ fami
     return null;
   }
 
-  const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-  console.log('📝 Сгенерирован код:', inviteCode);
-
   try {
+    // Сначала проверяем, есть ли уже пользователь в какой-либо семье
+    console.log('🔍 Проверяю, есть ли пользователь уже в семье...');
+    const { data: existingMember, error: checkError } = await supabase
+      .from('family_members')
+      .select('family_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('❌ Ошибка проверки существующей семьи:', checkError);
+    }
+
+    if (existingMember) {
+      console.log('⚠️ Пользователь уже в семье:', existingMember.family_id);
+      // Получаем данные существующей семьи
+      const { data: existingFamily, error: familyError } = await supabase
+        .from('families')
+        .select('id, invite_code')
+        .eq('id', existingMember.family_id)
+        .single();
+
+      if (!familyError && existingFamily) {
+        console.log('✅ Возвращаю существующую семью:', existingFamily);
+        return { familyId: existingFamily.id, inviteCode: existingFamily.invite_code };
+      }
+    }
+
+    // Создаём новую семью
+    const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+    console.log('📝 Сгенерирован код:', inviteCode);
+
     console.log('📤 Вставляю в таблицу families...');
     const { data, error } = await supabase
       .from('families')
@@ -345,6 +373,18 @@ export async function joinFamily(userId: string, inviteCode: string): Promise<bo
   if (!isSupabaseConfigured || !supabase) return false;
 
   try {
+    // Проверяем, есть ли уже пользователь в семье
+    const { data: existingMember } = await supabase
+      .from('family_members')
+      .select('family_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingMember) {
+      console.log('⚠️ Пользователь уже в семье');
+      return false;
+    }
+
     const { data: family, error: familyError } = await supabase
       .from('families')
       .select('id')
@@ -384,15 +424,20 @@ export async function getUserFamily(userId: string): Promise<any> {
   try {
     console.log('📤 Запрашиваю данные семьи...');
     
-    // Сначала находим семью пользователя
+    // Сначала находим семью пользователя (используем maybeSingle для безопасности)
     const { data: memberData, error: memberError } = await supabase
       .from('family_members')
       .select('family_id, role')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    if (memberError || !memberData) {
-      console.log('❌ Пользователь не в семье:', memberError);
+    if (memberError) {
+      console.error('❌ Ошибка запроса членства:', memberError);
+      return null;
+    }
+
+    if (!memberData) {
+      console.log('ℹ️ Пользователь не в семье');
       return null;
     }
 

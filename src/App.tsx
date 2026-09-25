@@ -225,14 +225,40 @@ export default function App() {
       console.log('📦 Результат createFamily:', result);
       
       if (result) {
-        console.log('✅ Семья создана, загружаю данные...');
-        const userFamily = await getUserFamily(userId);
-        console.log('👨‍👩‍👧 Данные семьи:', userFamily);
-        setFamily(userFamily);
+        console.log('✅ Семья создана, формирую данные для UI...');
+        
+        // Формируем данные семьи сразу из результата createFamily
+        const familyData = {
+          family_id: result.familyId,
+          role: 'owner',
+          families: {
+            id: result.familyId,
+            name: familyName.trim(),
+            invite_code: result.inviteCode,
+            family_members: [
+              {
+                user_id: userId,
+                role: 'owner',
+              },
+            ],
+          },
+        };
+        
+        console.log('👨‍👩‍👧 Данные семьи для UI:', familyData);
+        setFamily(familyData);
         setShowFamilyForm(false);
         setFamilyName('');
         hapticSuccess();
         alert('Семья создана!');
+        
+        // Дополнительно загружаем актуальные данные из БД (не блокируя UI)
+        setTimeout(async () => {
+          const userFamily = await getUserFamily(userId);
+          if (userFamily) {
+            console.log('🔄 Обновляю данные семьи из БД:', userFamily);
+            setFamily(userFamily);
+          }
+        }, 500);
       } else {
         console.log('❌ createFamily вернул null');
         alert('Ошибка при создании семьи');
@@ -267,13 +293,22 @@ export default function App() {
       
       if (success) {
         console.log('✅ Присоединился, загружаю данные...');
-        const userFamily = await getUserFamily(userId);
-        console.log('👨‍👩‍👧 Данные семьи:', userFamily);
-        setFamily(userFamily);
         setShowFamilyForm(false);
         setInviteCode('');
         hapticSuccess();
         alert('Вы присоединились к семье!');
+        
+        // Загружаем данные семьи с небольшой задержкой
+        setTimeout(async () => {
+          const userFamily = await getUserFamily(userId);
+          console.log('👨‍👩‍👧 Данные семьи:', userFamily);
+          if (userFamily) {
+            setFamily(userFamily);
+          } else {
+            console.error('❌ Не удалось загрузить данные семьи');
+            alert('Вы присоединились, но не удалось загрузить данные. Обновите страницу.');
+          }
+        }, 500);
       } else {
         console.log('❌ joinFamily вернул false');
         alert('Неверный код приглашения или ошибка');
