@@ -211,3 +211,99 @@ export async function deleteTask(taskId: string): Promise<boolean> {
     return true;
   }
 }
+
+// ====== FAMILY FUNCTIONS ======
+
+export async function createFamily(userId: string, name: string): Promise<{ familyId: string; inviteCode: string } | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+
+  const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+
+  try {
+    const { data, error } = await supabase
+      .from('families')
+      .insert({
+        name,
+        invite_code: inviteCode,
+        created_by: userId,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Добавляем создателя как owner
+    await supabase.from('family_members').insert({
+      family_id: data.id,
+      user_id: userId,
+      role: 'owner',
+    });
+
+    return { familyId: data.id, inviteCode: data.invite_code };
+  } catch (err) {
+    console.error('Error creating family:', err);
+    return null;
+  }
+}
+
+export async function joinFamily(userId: string, inviteCode: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+
+  try {
+    const { data: family, error: familyError } = await supabase
+      .from('families')
+      .select('id')
+      .eq('invite_code', inviteCode)
+      .single();
+
+    if (familyError || !family) return false;
+
+    const { error } = await supabase
+      .from('family_members')
+      .insert({
+        family_id: family.id,
+        user_id: userId,
+        role: 'member',
+      });
+
+    if (error) {
+      console.error('Error joining family:', error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error joining family:', err);
+    return false;
+  }
+}
+
+export async function getUserFamily(userId: string): Promise<any> {
+  if (!isSupabaseConfigured || !supabase) return null;
+
+  try {
+    const { data } = await supabase
+      .from('family_members')
+      .select(`
+        family_id,
+        role,
+        families (
+          id,
+          name,
+          invite_code,
+          family_members (
+            user_id,
+            role,
+            profiles (telegram_id, first_name, last_name, username)
+          )
+        )
+      `)
+      .eq('user_id', userId)
+      .single();
+
+    return data;
+  } catch (err) {
+    console.error('Error getting user family:', err);
+    return null;
+  }
+}

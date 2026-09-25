@@ -3,6 +3,7 @@ import { Task, ViewMode, FilterStatus, FilterPriority } from './types';
 import { useTelegram } from './useTelegram';
 import { getGreeting } from './utils';
 import { loadTasks, createTask, updateTask, deleteTask, isSupabaseConfigured, supabase } from './supabase';
+import { createFamily, joinFamily, getUserFamily } from './supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
@@ -12,6 +13,8 @@ import {
   Cloud,
   Smartphone,
   Info,
+  Check,
+  Copy,
 } from 'lucide-react';
 import TaskCard from './components/TaskCard';
 import TaskForm from './components/TaskForm';
@@ -29,6 +32,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
   const [showSyncInfo, setShowSyncInfo] = useState(false);
+  const [family, setFamily] = useState<any>(null);
+  const [showFamilyForm, setShowFamilyForm] = useState(false);
+  const [familyName, setFamilyName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const { tgUser, hapticFeedback, hapticSuccess } = useTelegram();
 
@@ -46,6 +54,13 @@ export default function App() {
       // Загружаем задачи
       const userTasks = await loadTasks(userId || undefined);
       setTasks(userTasks);
+
+      // Загружаем семью
+      if (userId) {
+        const userFamily = await getUserFamily(userId);
+        setFamily(userFamily);
+      }
+
       setLoading(false);
     };
 
@@ -165,6 +180,41 @@ export default function App() {
     setShowForm(true);
   };
 
+  const handleCreateFamily = async () => {
+    if (!familyName.trim() || !userId) return;
+    const result = await createFamily(userId, familyName.trim());
+    if (result) {
+      const userFamily = await getUserFamily(userId);
+      setFamily(userFamily);
+      setShowFamilyForm(false);
+      setFamilyName('');
+      hapticSuccess();
+    }
+  };
+
+  const handleJoinFamily = async () => {
+    if (!inviteCode.trim() || !userId) return;
+    const success = await joinFamily(userId, inviteCode.trim().toUpperCase());
+    if (success) {
+      const userFamily = await getUserFamily(userId);
+      setFamily(userFamily);
+      setShowFamilyForm(false);
+      setInviteCode('');
+      hapticSuccess();
+    } else {
+      hapticFeedback('medium');
+    }
+  };
+
+  const handleCopyInviteCode = () => {
+    if (family?.families?.invite_code) {
+      navigator.clipboard.writeText(family.families.invite_code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      hapticSuccess();
+    }
+  };
+
   const activeCount = tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled').length;
 
   // Экран загрузки
@@ -206,6 +256,7 @@ export default function App() {
               {[
                 { mode: 'list' as ViewMode, icon: List },
                 { mode: 'stats' as ViewMode, icon: BarChart3 },
+                { mode: 'board' as ViewMode, icon: Users },
               ].map(({ mode, icon: Icon }) => (
                 <button
                   key={mode}
@@ -252,6 +303,138 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Family section */}
+      {viewMode === 'board' && (
+        <div className="px-4 py-3">
+          {family ? (
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-4 border border-blue-100">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  👨‍👩‍👧 {family.families?.name || 'Семья'}
+                </h3>
+                <button
+                  onClick={handleCopyInviteCode}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white rounded-lg text-sm font-medium text-blue-600 shadow-sm"
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? 'Скопировано!' : 'Код'}
+                </button>
+              </div>
+              <div className="bg-white/60 rounded-xl p-3 mb-3">
+                <p className="text-xs text-gray-600 mb-1">Код приглашения:</p>
+                <p className="font-mono font-bold text-lg text-blue-600">{family.families?.invite_code}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 mb-2">Участники:</p>
+                <div className="flex flex-wrap gap-2">
+                  {family.families?.family_members?.map((member: any) => (
+                    <div key={member.user_id} className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg text-sm shadow-sm">
+                      <span className="font-medium text-gray-900">
+                        {member.profiles?.first_name || 'Участник'}
+                      </span>
+                      {member.role === 'owner' && <span className="text-yellow-500 text-xs">⭐</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl p-5 border border-gray-100 text-center">
+              <div className="text-5xl mb-3">👨‍👩‍👧</div>
+              <h3 className="font-semibold text-gray-900 mb-2">Семейные задачи</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Создайте семью или присоединитесь по коду, чтобы делиться задачами с близкими
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowFamilyForm(true)}
+                  className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
+                >
+                  Создать семью
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFamilyForm(true);
+                    setInviteCode('');
+                    setFamilyName('');
+                  }}
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm"
+                >
+                  Присоединиться
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Family form modal */}
+          <AnimatePresence>
+            {showFamilyForm && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 z-50 flex items-end"
+                onClick={() => setShowFamilyForm(false)}
+              >
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                  className="bg-white w-full rounded-t-3xl p-5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Семья</h2>
+                  
+                  {!family ? (
+                    <>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Название семьи</label>
+                        <input
+                          type="text"
+                          value={familyName}
+                          onChange={(e) => setFamilyName(e.target.value)}
+                          placeholder="Например: Наша семья"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                        />
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Или код приглашения</label>
+                        <input
+                          type="text"
+                          value={inviteCode}
+                          onChange={(e) => setInviteCode(e.target.value)}
+                          placeholder="ABCD1234"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none font-mono uppercase"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleCreateFamily}
+                          disabled={!familyName.trim()}
+                          className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-medium disabled:opacity-50"
+                        >
+                          Создать
+                        </button>
+                        <button
+                          onClick={handleJoinFamily}
+                          disabled={!inviteCode.trim()}
+                          className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium disabled:opacity-50"
+                        >
+                          Присоединиться
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-center text-gray-500 py-4">Вы уже в семье</p>
+                  )}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
