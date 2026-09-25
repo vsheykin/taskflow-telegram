@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskFlow — Диагностика</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f3f4f6;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 24px; margin-bottom: 8px; color: #111827; }
+    .subtitle { color: #6b7280; margin-bottom: 24px; font-size: 14px; }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .card h2 { font-size: 16px; margin-bottom: 12px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .ok { background: #dcfce7; color: #166534; }
+    .error { background: #fef2f2; color: #991b1b; }
+    .warn { background: #fef9c3; color: #854d0e; }
+    .detail {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 8px;
+      word-break: break-all;
+      font-family: monospace;
+      background: #f9fafb;
+      padding: 8px 12px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+      margin-top: 12px;
+      margin-right: 8px;
+    }
+    .btn.secondary { background: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Диагностика TaskFlow</h1>
+    <p class="subtitle">Проверка конфигурации</p>
+
+    <div class="card">
+      <h2>🌐 URL и деплой</h2>
+      <div id="url-status"></div>
+      <div class="detail" id="url-detail"></div>
+    </div>
+
+    <div class="card">
+      <h2>📱 Telegram</h2>
+      <div id="tg-status"></div>
+      <div class="detail" id="tg-detail"></div>
+    </div>
+
+    <div class="card">
+      <h2>📋 Что делать дальше</h2>
+      <div id="next-steps"></div>
+    </div>
+
+    <div style="text-align: center; margin-top: 20px;">
+      <a href="./" class="btn">← Открыть приложение</a>
+      <button class="btn secondary" onclick="location.reload()">🔄 Обновить</button>
+    </div>
+  </div>
+
+  <script>
+    // URL проверка
+    const urlStatus = document.getElementById('url-status');
+    const urlDetail = document.getElementById('url-detail');
+    const url = window.location.href;
+    const isGH = url.includes('github.io');
+    
+    urlStatus.innerHTML = isGH 
+      ? '<span class="status ok">✅ GitHub Pages</span>'
+      : '<span class="status warn">⚠️ Не GitHub Pages</span>';
+    urlDetail.textContent = 'Текущий URL:\n' + url + '\n\nОжидается:\nhttps://ВАШ_ЛОГИН.github.io/ИМЯ_РЕПО/';
+
+    // Telegram проверка
+    const tgStatus = document.getElementById('tg-status');
+    const tgDetail = document.getElementById('tg-detail');
+    
+    if (window.Telegram?.WebApp) {
+      const user = window.Telegram.WebApp.initDataUnsafe?.user;
+      if (user) {
+        tgStatus.innerHTML = '<span class="status ok">✅ Авторизован</span>';
+        tgDetail.textContent = 'Имя: ' + user.first_name + '\nID: ' + user.id;
+      } else {
+        tgStatus.innerHTML = '<span class="status warn">⚠️ Telegram есть, но нет пользователя</span>';
+        tgDetail.textContent = 'Откройте через бота в Telegram';
+      }
+    } else {
+      tgStatus.innerHTML = '<span class="status warn">⚠️ Не в Telegram</span>';
+      tgDetail.textContent = 'Это нормально в браузере. Откройте через бота.';
+    }
+
+    // Следующие шаги
+    const nextSteps = document.getElementById('next-steps');
+    let steps = '';
+    
+    if (!isGH) {
+      steps += '<p style="margin-bottom:8px">❌ <b>Сайт не на GitHub Pages</b></p>';
+      steps += '<p style="font-size:13px;color:#6b7280;margin-bottom:12px">Убедитесь, что:<br>1. В Settings → Pages выбрано "GitHub Actions"<br>2. Workflow завершился успешно (вкладка Actions)<br>3. Имя репозитория совпадает с base в vite.config.js</p>';
+    }
+    
+    steps += '<p style="margin-bottom:8px">📌 <b>Проверьте консоль браузера</b></p>';
+    steps += '<p style="font-size:13px;color:#6b7280;margin-bottom:12px">Нажмите F12 → вкладка Console. Найдите строки:<br><code>[TaskFlow] Supabase configured: true/false</code><br><code>[TaskFlow] Supabase URL: ...</code></p>';
+    
+    steps += '<p style="margin-bottom:8px">📌 <b>Проверьте GitHub Secrets</b></p>';
+    steps += '<p style="font-size:13px;color:#6b7280">Settings → Secrets → Actions. Должны быть:<br>• VITE_SUPABASE_URL<br>• VITE_SUPABASE_ANON_KEY</p>';
+
+    nextSteps.innerHTML = steps;
+  </script>
+</body>
+</html>

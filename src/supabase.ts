@@ -13,6 +13,8 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   : null;
 
 console.log('[TaskFlow] Supabase configured:', isSupabaseConfigured);
+console.log('[TaskFlow] Supabase URL:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'NOT SET');
+console.log('[TaskFlow] Supabase Key:', supabaseAnonKey ? 'SET (' + supabaseAnonKey.substring(0, 20) + '...)' : 'NOT SET');
 
 // ====== LOCAL STORAGE FALLBACK ======
 const STORAGE_KEY = 'taskflow_tasks';
