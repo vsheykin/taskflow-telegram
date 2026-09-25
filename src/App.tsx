@@ -78,8 +78,9 @@ export default function App() {
         const userFamily = await getUserFamily(String(telegramId));
         setFamily(userFamily);
       } else {
-        console.log('⚠️ Telegram пользователь не определён, разрешаю доступ');
-        setIsAllowed(true); // Если нет Telegram, разрешаем доступ (для тестирования)
+        console.log('⚠️ Telegram пользователь не определён');
+        console.log('💡 Откройте приложение через Telegram бота для полной функциональности');
+        setIsAllowed(true); // Разрешаем доступ для тестирования в браузере
       }
 
       setLoading(false);
