@@ -44,8 +44,32 @@ export async function loadTasks(userId?: string, familyMemberIds?: string[]): Pr
   }
 
   try {
-    // Загружаем все задачи (личные + семейные)
-    // Фильтрацию будем делать на клиенте
+    // Сначала проверяем, состоит ли пользователь в семье
+    let isInFamily = false;
+    let familyMemberUserIds: string[] = [];
+    
+    if (userId) {
+      const {  memberData } = await supabase
+        .from('family_members')
+        .select('family_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (memberData) {
+        isInFamily = true;
+        // Получаем всех членов семьи
+        const {  members } = await supabase
+          .from('family_members')
+          .select('user_id')
+          .eq('family_id', memberData.family_id);
+        
+        if (members) {
+          familyMemberUserIds = members.map((m: any) => m.user_id);
+        }
+      }
+    }
+
+    // Загружаем все задачи
     const { data, error } = await supabase
       .from('tasks')
       .select(`*, task_tags (tag)`)
@@ -54,10 +78,17 @@ export async function loadTasks(userId?: string, familyMemberIds?: string[]): Pr
     if (error) throw error;
     if (!data) return [];
 
-    // Фильтруем: личные задачи пользователя + семейные задачи всех членов семьи
+    // Фильтруем задачи
     const filtered = data.filter((task: any) => {
-      if (task.scope === 'family') return true; // Семейные задачи видны всем
-      if (task.scope === 'personal' && task.user_id === userId) return true; // Личные только свои
+      // Личные задачи видны только создателю
+      if (task.scope === 'personal' && task.user_id === userId) return true;
+      
+      // Семейные задачи видны только членам семьи
+      if (task.scope === 'family' && isInFamily) {
+        // Показываем семейные задачи всех членов семьи
+        return familyMemberUserIds.includes(task.user_id);
+      }
+      
       return false;
     });
 
