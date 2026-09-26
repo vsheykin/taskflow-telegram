@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Task, Priority, Status, Category, TaskScope } from '../types';
 import { generateId } from '../store';
+import { toLocalISOString } from '../utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trash2, Calendar, Bell, Tag, User, Users } from 'lucide-react';
 
@@ -31,8 +32,9 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       setStatus(task.status);
       setCategory(task.category);
       setScope(task.scope || 'personal');
-      setDueDate(task.dueDate ? task.dueDate.slice(0, 16) : '');
-      setReminderDate(task.reminderDate ? task.reminderDate.slice(0, 16) : '');
+      // Конвертируем из UTC в локальное время для отображения
+      setDueDate(task.dueDate ? toLocalISOString(new Date(task.dueDate)) : '');
+      setReminderDate(task.reminderDate ? toLocalISOString(new Date(task.reminderDate)) : '');
       setTags(task.tags.join(', '));
     }
   }, [task]);
@@ -49,8 +51,9 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       category,
       scope,
       createdAt: task?.createdAt || new Date().toISOString(),
-      dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-      reminderDate: reminderDate ? new Date(reminderDate).toISOString() : null,
+      // Сохраняем в локальном времени
+      dueDate: dueDate ? toLocalISOString(new Date(dueDate)) : null,
+      reminderDate: reminderDate ? toLocalISOString(new Date(reminderDate)) : null,
       reminderSent: task?.reminderSent || false,
       completedAt: status === 'completed' ? new Date().toISOString() : null,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
