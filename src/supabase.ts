@@ -555,7 +555,14 @@ export async function sendTelegramNotification(
     const message = `🔔 <b>Напоминание о задаче</b>\n\n` +
       `📝 <b>${title}</b>\n` +
       (description ? `\n${description}\n` : '') +
-      (dueDate ? `\n⏰ Дедлайн: ${new Date(dueDate).toLocaleString('ru-RU')}` : '');
+      (dueDate ? `\n⏰ Дедлайн: ${new Date(dueDate).toLocaleString('ru-RU', { 
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}` : '');
 
     const response = await fetch(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -593,15 +600,15 @@ export async function checkAndSendReminders(userId: string): Promise<number> {
 
   try {
     console.log('🔔 Проверяю просроченные напоминания...');
-    const now = new Date().toISOString();
+    const now = new Date();
 
-    // Получаем задачи с просроченными напоминаниями
+    // Получаем все неотправленные напоминания
     const { data: tasks, error } = await supabase
       .from('tasks')
       .select('*')
-      .lte('reminder_date', now)
       .eq('reminder_sent', false)
-      .in('status', ['new', 'in_progress']);
+      .in('status', ['new', 'in_progress'])
+      .not('reminder_date', 'is', null);
 
     if (error) {
       console.error('❌ Ошибка получения задач:', error);
@@ -609,15 +616,27 @@ export async function checkAndSendReminders(userId: string): Promise<number> {
     }
 
     if (!tasks || tasks.length === 0) {
+      console.log('ℹ️ Нет напоминаний для проверки');
+      return 0;
+    }
+
+    // Фильтруем задачи с просроченными напоминаниями (сравнение в локальном времени)
+    const overdueTasks = tasks.filter((task: any) => {
+      if (!task.reminder_date) return false;
+      const reminderTime = new Date(task.reminder_date);
+      return reminderTime <= now;
+    });
+
+    if (overdueTasks.length === 0) {
       console.log('ℹ️ Нет просроченных напоминаний');
       return 0;
     }
 
-    console.log(`📋 Найдено просроченных напоминаний: ${tasks.length}`);
+    console.log(`📋 Найдено просроченных напоминаний: ${overdueTasks.length}`);
 
     let sentCount = 0;
 
-    for (const task of tasks) {
+    for (const task of overdueTasks) {
       // Отправляем уведомление
       const sent = await sendTelegramNotification(
         task.user_id,
