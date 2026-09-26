@@ -5,6 +5,10 @@ import { Task } from './types';
 export const supabaseUrl = 'https://fgyyzyruhwdbvzvtojoy.supabase.co';
 export const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZneXl6eXJ1aHdkYnZ6dnRvam95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNzg2MTksImV4cCI6MjEwNTg1NDYxOX0.mLbiw3OYP-4TL6WlVp6GS8-EXOK0fekLyktedoj_7vs';
 
+// Telegram Bot Token (для отправки напоминаний)
+// ВАЖНО: Замените на токен вашего бота из @BotFather
+export const TELEGRAM_BOT_TOKEN = ''; // ← Вставьте токен сюда
+
 // Флаг: Supabase настроен?
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
@@ -530,5 +534,112 @@ export async function getUserFamily(userId: string): Promise<any> {
   } catch (err) {
     console.error('❌ Ошибка в getUserFamily:', err);
     return null;
+  }
+}
+
+// ====== TELEGRAM NOTIFICATIONS ======
+
+// Отправка уведомления в Telegram
+export async function sendTelegramNotification(
+  chatId: string | number,
+  title: string,
+  description?: string,
+  dueDate?: string | null
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.warn('⚠️ TELEGRAM_BOT_TOKEN не установлен');
+    return false;
+  }
+
+  try {
+    const message = `🔔 <b>Напоминание о задаче</b>\n\n` +
+      `📝 <b>${title}</b>\n` +
+      (description ? `\n${description}\n` : '') +
+      (dueDate ? `\n⏰ Дедлайн: ${new Date(dueDate).toLocaleString('ru-RU')}` : '');
+
+    const response = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: 'HTML',
+        }),
+      }
+    );
+
+    if (response.ok) {
+      console.log('✅ Уведомление отправлено в Telegram');
+      return true;
+    } else {
+      const errorData = await response.json();
+      console.error('❌ Ошибка отправки в Telegram:', errorData);
+      return false;
+    }
+  } catch (err) {
+    console.error('❌ Ошибка отправки уведомления:', err);
+    return false;
+  }
+}
+
+// Проверка и отправка просроченных напоминаний при загрузке приложения
+export async function checkAndSendReminders(userId: string): Promise<number> {
+  if (!isSupabaseConfigured || !supabase || !TELEGRAM_BOT_TOKEN) {
+    console.log('ℹ️ Проверка напоминаний пропущена (Supabase или Bot Token не настроены)');
+    return 0;
+  }
+
+  try {
+    console.log('🔔 Проверяю просроченные напоминания...');
+    const now = new Date().toISOString();
+
+    // Получаем задачи с просроченными напоминаниями
+    const { data: tasks, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .lte('reminder_date', now)
+      .eq('reminder_sent', false)
+      .in('status', ['new', 'in_progress']);
+
+    if (error) {
+      console.error('❌ Ошибка получения задач:', error);
+      return 0;
+    }
+
+    if (!tasks || tasks.length === 0) {
+      console.log('ℹ️ Нет просроченных напоминаний');
+      return 0;
+    }
+
+    console.log(`📋 Найдено просроченных напоминаний: ${tasks.length}`);
+
+    let sentCount = 0;
+
+    for (const task of tasks) {
+      // Отправляем уведомление
+      const sent = await sendTelegramNotification(
+        task.user_id,
+        task.title,
+        task.description,
+        task.due_date
+      );
+
+      if (sent) {
+        // Помечаем как отправленное
+        await supabase
+          .from('tasks')
+          .update({ reminder_sent: true })
+          .eq('id', task.id);
+        sentCount++;
+      }
+    }
+
+    console.log(`✅ Отправлено напоминаний: ${sentCount}`);
+    return sentCount;
+  } catch (err) {
+    console.error('❌ Ошибка проверки напоминаний:', err);
+    return 0;
   }
 }
