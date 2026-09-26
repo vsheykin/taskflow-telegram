@@ -6,8 +6,8 @@ export const supabaseUrl = 'https://fgyyzyruhwdbvzvtojoy.supabase.co';
 export const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZneXl6eXJ1aHdkYnZ6dnRvam95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNzg2MTksImV4cCI6MjEwNTg1NDYxOX0.mLbiw3OYP-4TL6WlVp6GS8-EXOK0fekLyktedoj_7vs';
 
 // Telegram Bot Token (для отправки напоминаний)
-// ВАЖНО: Замените на токен вашего бота из @BotFather
-export const TELEGRAM_BOT_TOKEN = ''; // ← Вставьте токен сюда
+// Передаётся через переменную окружения VITE_TELEGRAM_BOT_TOKEN
+export const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || '';
 
 // Флаг: Supabase настроен?
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);

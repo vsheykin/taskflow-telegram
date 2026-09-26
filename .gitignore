@@ -14,7 +14,8 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Environment (коммитим .env для GitHub Pages)
+# Environment (все .env файлы не коммитим, используем GitHub Secrets)
+.env
 .env.local
 .env.*.local
 .env.production
