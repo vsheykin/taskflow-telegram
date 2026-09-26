@@ -10,6 +10,7 @@ import {
   List,
   BarChart3,
   Users,
+  User,
   Cloud,
   Smartphone,
   Info,
@@ -175,6 +176,10 @@ export default function App() {
     setEditingTask(null);
     hapticFeedback('medium');
   }, [userId, hapticFeedback]);
+
+  // Разделяем задачи на личные и семейные
+  const personalTasks = tasks.filter(t => t.scope === 'personal');
+  const familyTasks = tasks.filter(t => t.scope === 'family');
 
   const handleToggleStatus = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
@@ -592,17 +597,55 @@ export default function App() {
             {/* Task List */}
             <div className="px-4 pb-24">
               {sortedTasks.length > 0 ? (
-                <AnimatePresence>
-                  {sortedTasks.map(task => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      onToggleStatus={handleToggleStatus}
-                      onEdit={handleEditTask}
-                      onDelete={handleDeleteTask}
-                    />
-                  ))}
-                </AnimatePresence>
+                <>
+                  {/* Семейные задачи */}
+                  {familyTasks.filter(t => sortedTasks.includes(t)).length > 0 && (
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <Users size={16} className="text-purple-500" />
+                        <h3 className="text-sm font-semibold text-purple-700">Семейные задачи</h3>
+                        <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">
+                          {familyTasks.filter(t => sortedTasks.includes(t)).length}
+                        </span>
+                      </div>
+                      <AnimatePresence>
+                        {sortedTasks.filter(t => t.scope === 'family').map(task => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onToggleStatus={handleToggleStatus}
+                            onEdit={handleEditTask}
+                            onDelete={handleDeleteTask}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {/* Личные задачи */}
+                  {personalTasks.filter(t => sortedTasks.includes(t)).length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <User size={16} className="text-blue-500" />
+                        <h3 className="text-sm font-semibold text-blue-700">Личные задачи</h3>
+                        <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
+                          {personalTasks.filter(t => sortedTasks.includes(t)).length}
+                        </span>
+                      </div>
+                      <AnimatePresence>
+                        {sortedTasks.filter(t => t.scope === 'personal').map(task => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onToggleStatus={handleToggleStatus}
+                            onEdit={handleEditTask}
+                            onDelete={handleDeleteTask}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </>
               ) : (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -649,6 +692,7 @@ export default function App() {
               setShowForm(false);
               setEditingTask(null);
             }}
+            hasFamily={!!family}
           />
         )}
       </AnimatePresence>

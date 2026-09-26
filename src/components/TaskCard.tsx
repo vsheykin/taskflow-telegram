@@ -93,6 +93,12 @@ export default function TaskCard({ task, onToggleStatus, onEdit, onDelete }: Tas
 
           {/* Tags */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Scope indicator */}
+            {task.scope === 'family' && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 border border-purple-200">
+                👨‍👩‍👧 Семейная
+              </span>
+            )}
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${priority.color}`}>
               {priority.icon} {priority.label}
             </span>
