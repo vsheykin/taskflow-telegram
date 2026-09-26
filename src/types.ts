@@ -1,6 +1,7 @@
 export type Priority = 'high' | 'medium' | 'low';
 export type Status = 'new' | 'in_progress' | 'completed' | 'cancelled';
 export type Category = 'work' | 'personal' | 'health' | 'study' | 'other';
+export type TaskScope = 'personal' | 'family';
 
 export interface Task {
   id: string;
@@ -9,6 +10,8 @@ export interface Task {
   priority: Priority;
   status: Status;
   category: Category;
+  scope: TaskScope;
+  userId?: string;
   createdAt: string;
   dueDate: string | null;
   reminderDate: string | null;

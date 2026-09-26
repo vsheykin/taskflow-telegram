@@ -38,12 +38,14 @@ function generateId(): string {
 
 // ====== API ФУНКЦИИ ======
 
-export async function loadTasks(userId?: string): Promise<Task[]> {
+export async function loadTasks(userId?: string, familyMemberIds?: string[]): Promise<Task[]> {
   if (!isSupabaseConfigured || !supabase) {
     return loadTasksLocal();
   }
 
   try {
+    // Загружаем все задачи (личные + семейные)
+    // Фильтрацию будем делать на клиенте
     const { data, error } = await supabase
       .from('tasks')
       .select(`*, task_tags (tag)`)
@@ -52,13 +54,22 @@ export async function loadTasks(userId?: string): Promise<Task[]> {
     if (error) throw error;
     if (!data) return [];
 
-    return data.map((task: any) => ({
+    // Фильтруем: личные задачи пользователя + семейные задачи всех членов семьи
+    const filtered = data.filter((task: any) => {
+      if (task.scope === 'family') return true; // Семейные задачи видны всем
+      if (task.scope === 'personal' && task.user_id === userId) return true; // Личные только свои
+      return false;
+    });
+
+    return filtered.map((task: any) => ({
       id: task.id,
       title: task.title,
       description: task.description || '',
       priority: task.priority,
       status: task.status,
       category: task.category,
+      scope: task.scope || 'personal',
+      userId: task.user_id,
       createdAt: task.created_at,
       dueDate: task.due_date,
       reminderDate: task.reminder_date,
@@ -96,6 +107,7 @@ export async function createTask(userId: string | undefined, task: Omit<Task, 'i
         priority: task.priority,
         status: task.status,
         category: task.category,
+        scope: task.scope || 'personal',
         due_date: task.dueDate,
         reminder_date: task.reminderDate,
         completed_at: task.completedAt,
@@ -118,6 +130,8 @@ export async function createTask(userId: string | undefined, task: Omit<Task, 'i
       priority: data.priority,
       status: data.status,
       category: data.category,
+      scope: data.scope || task.scope || 'personal',
+      userId: data.user_id,
       createdAt: data.created_at,
       dueDate: data.due_date,
       reminderDate: data.reminder_date,
@@ -157,6 +171,7 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
     if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
     if (updates.category !== undefined) dbUpdates.category = updates.category;
+    if (updates.scope !== undefined) dbUpdates.scope = updates.scope;
     if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
     if (updates.reminderDate !== undefined) dbUpdates.reminder_date = updates.reminderDate;
     if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt;

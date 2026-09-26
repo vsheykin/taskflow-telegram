@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Task, Priority, Status, Category } from '../types';
+import { Task, Priority, Status, Category, TaskScope } from '../types';
 import { generateId } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, Calendar, Bell, Tag } from 'lucide-react';
+import { X, Trash2, Calendar, Bell, Tag, User, Users } from 'lucide-react';
 
 interface TaskFormProps {
   task: Task | null;
   onSave: (task: Task) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  hasFamily?: boolean;
 }
 
-export default function TaskForm({ task, onSave, onDelete, onClose }: TaskFormProps) {
+export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }: TaskFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [status, setStatus] = useState<Status>('new');
   const [category, setCategory] = useState<Category>('work');
+  const [scope, setScope] = useState<TaskScope>('personal');
   const [dueDate, setDueDate] = useState('');
   const [reminderDate, setReminderDate] = useState('');
   const [tags, setTags] = useState('');
@@ -28,6 +30,7 @@ export default function TaskForm({ task, onSave, onDelete, onClose }: TaskFormPr
       setPriority(task.priority);
       setStatus(task.status);
       setCategory(task.category);
+      setScope(task.scope || 'personal');
       setDueDate(task.dueDate ? task.dueDate.slice(0, 16) : '');
       setReminderDate(task.reminderDate ? task.reminderDate.slice(0, 16) : '');
       setTags(task.tags.join(', '));
@@ -44,6 +47,7 @@ export default function TaskForm({ task, onSave, onDelete, onClose }: TaskFormPr
       priority,
       status,
       category,
+      scope,
       createdAt: task?.createdAt || new Date().toISOString(),
       dueDate: dueDate ? new Date(dueDate).toISOString() : null,
       reminderDate: reminderDate ? new Date(reminderDate).toISOString() : null,
@@ -168,6 +172,41 @@ export default function TaskForm({ task, onSave, onDelete, onClose }: TaskFormPr
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Scope */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Тип задачи</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setScope('personal')}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                  scope === 'personal'
+                    ? 'bg-blue-50 border-2 border-blue-500 text-blue-700'
+                    : 'bg-gray-50 border-2 border-transparent text-gray-600'
+                }`}
+              >
+                <User size={16} /> Личная
+              </button>
+              <button
+                onClick={() => setScope('family')}
+                disabled={!hasFamily}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                  scope === 'family'
+                    ? 'bg-purple-50 border-2 border-purple-500 text-purple-700'
+                    : hasFamily
+                      ? 'bg-gray-50 border-2 border-transparent text-gray-600'
+                      : 'bg-gray-50 border-2 border-transparent text-gray-300 cursor-not-allowed'
+                }`}
+              >
+                <Users size={16} /> Семейная
+              </button>
+            </div>
+            {!hasFamily && (
+              <p className="text-xs text-gray-400 mt-1">
+                Создайте семью, чтобы добавлять семейные задачи
+              </p>
+            )}
           </div>
 
           {/* Status */}
