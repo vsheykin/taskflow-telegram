@@ -18,10 +18,7 @@ serve(async (req) => {
     const now = new Date().toISOString()
     const { data: tasks, error } = await supabase
       .from('tasks')
-      .select(`
-        *,
-        profiles:user_id (telegram_id, first_name)
-      `)
+      .select('*')
       .lte('reminder_date', now)
       .eq('reminder_sent', false)
       .in('status', ['new', 'in_progress'])
@@ -44,8 +41,15 @@ serve(async (req) => {
     let failedCount = 0
 
     for (const task of tasks) {
-      const telegramId = task.profiles?.telegram_id
-      const userName = task.profiles?.first_name || 'Пользователь'
+      // Получаем информацию о пользователе отдельно
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('telegram_id, first_name')
+        .eq('telegram_id', task.user_id)
+        .single()
+
+      const telegramId = profile?.telegram_id
+      const userName = profile?.first_name || 'Пользователь'
 
       if (!telegramId) {
         console.warn(`⚠️ Нет telegram_id для задачи ${task.id}`)
