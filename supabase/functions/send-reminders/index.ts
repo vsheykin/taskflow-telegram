@@ -16,6 +16,29 @@ serve(async (req) => {
 
     // Получаем задачи с напоминаниями, которые нужно отправить
     const now = new Date().toISOString()
+    console.log('🕐 Текущее время:', now)
+    
+    // Сначала получаем ВСЕ задачи для отладки
+    const { data: allTasks, error: allError } = await supabase
+      .from('tasks')
+      .select('*')
+    
+    if (allError) {
+      console.error('❌ Ошибка получения всех задач:', allError)
+    } else {
+      console.log(`📊 Всего задач в БД: ${allTasks?.length || 0}`)
+      if (allTasks && allTasks.length > 0) {
+        console.log('📋 Примеры задач:', allTasks.slice(0, 3).map(t => ({
+          id: t.id,
+          title: t.title,
+          reminder_date: t.reminder_date,
+          reminder_sent: t.reminder_sent,
+          status: t.status,
+          user_id: t.user_id
+        })))
+      }
+    }
+    
     const { data: tasks, error } = await supabase
       .from('tasks')
       .select('*')
@@ -30,6 +53,10 @@ serve(async (req) => {
 
     if (!tasks || tasks.length === 0) {
       console.log('ℹ️ Нет задач для напоминания')
+      console.log('🔍 Условия фильтрации:')
+      console.log('  - reminder_date <= NOW()')
+      console.log('  - reminder_sent = false')
+      console.log('  - status IN (new, in_progress)')
       return new Response(JSON.stringify({ message: 'No reminders to send' }), {
         headers: { 'Content-Type': 'application/json' },
       })

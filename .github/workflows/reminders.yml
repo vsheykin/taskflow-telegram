@@ -9,8 +9,19 @@ jobs:
   send-reminders:
     runs-on: ubuntu-latest
     steps:
+      - name: Check secret
+        run: |
+          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "❌ Secret SUPABASE_SERVICE_ROLE_KEY is empty!"
+            exit 1
+          else
+            echo "✅ Secret exists (length: ${#SUPABASE_SERVICE_ROLE_KEY})"
+          fi
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
       - name: Call Supabase Edge Function
         run: |
-          curl -X POST https://fgyyzyruhwdbvzvtojoy.supabase.co/functions/v1/send-reminders \
+          curl -v -X POST https://fgyyzyruhwdbvzvtojoy.supabase.co/functions/v1/send-reminders \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json"
