@@ -1,27 +1,89 @@
-name: Send Task Reminders
+name: Send Task Reminders (Backup)
+
+# Этот workflow больше не нужен для напоминаний!
+# Напоминания теперь отправляются прямо из приложения при открытии.
+# Оставлен как резервный вариант для ручной отправки.
 
 on:
+  workflow_dispatch:  # Только ручной запуск
   schedule:
-    - cron: '*/5 * * * *'  # Каждые 5 минут
-  workflow_dispatch:  # Ручной запуск
+    - cron: '0 */6 * * *'  # Раз в 6 часов (для подстраховки)
 
 jobs:
   send-reminders:
     runs-on: ubuntu-latest
     steps:
-      - name: Check secret
+      - name: Check secrets
         run: |
-          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
-            echo "❌ Secret SUPABASE_SERVICE_ROLE_KEY is empty!"
+          if [ -z "${{ secrets.VITE_SUPABASE_URL }}" ]; then
+            echo "❌ Secret VITE_SUPABASE_URL is empty!"
             exit 1
-          else
-            echo "✅ Secret exists (length: ${#SUPABASE_SERVICE_ROLE_KEY})"
           fi
-        env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          if [ -z "${{ secrets.VITE_SUPABASE_ANON_KEY }}" ]; then
+            echo "❌ Secret VITE_SUPABASE_ANON_KEY is empty!"
+            exit 1
+          fi
+          if [ -z "${{ secrets.VITE_TELEGRAM_BOT_TOKEN }}" ]; then
+            echo "❌ Secret VITE_TELEGRAM_BOT_TOKEN is empty!"
+            exit 1
+          fi
+          echo "✅ All secrets are set"
 
-      - name: Call Supabase Edge Function
+      - name: Send reminders via Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.VITE_TELEGRAM_BOT_TOKEN }}
         run: |
-          curl -v -X POST https://fgyyzyruhwdbvzvtojoy.supabase.co/functions/v1/send-reminders \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json"
+          echo "🔔 Получаем задачи с просроченными напоминаниями..."
+          
+          # Получаем задачи с просроченными напоминаниями
+          RESPONSE=$(curl -s -X GET \
+            "${SUPABASE_URL}/rest/v1/tasks?select=*&reminder_date=lte.$(date -u +%Y-%m-%dT%H:%M:%S)&reminder_sent=eq.false&status=in.(new,in_progress)" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          
+          echo "📋 Ответ: $RESPONSE"
+          
+          # Проверяем, есть ли задачи
+          if [ "$RESPONSE" = "[]" ] || [ -z "$RESPONSE" ]; then
+            echo "ℹ️ Нет задач для напоминания"
+            exit 0
+          fi
+          
+          # Отправляем уведомления (простая обработка через jq)
+          echo "$RESPONSE" | jq -c '.[]' | while read -r task; do
+            TASK_ID=$(echo "$task" | jq -r '.id')
+            TITLE=$(echo "$task" | jq -r '.title')
+            USER_ID=$(echo "$task" | jq -r '.user_id')
+            DESCRIPTION=$(echo "$task" | jq -r '.description // empty')
+            
+            echo "📤 Отправляю напоминание для задачи: $TITLE (user: $USER_ID)"
+            
+            # Формируем сообщение
+            MESSAGE="🔔 <b>Напоминание о задаче</b>%0A%0A📝 <b>${TITLE}</b>"
+            if [ -n "$DESCRIPTION" ]; then
+              MESSAGE="${MESSAGE}%0A%0A${DESCRIPTION}"
+            fi
+            
+            # Отправляем в Telegram
+            TG_RESPONSE=$(curl -s -X POST \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{\"chat_id\": \"${USER_ID}\", \"text\": \"${MESSAGE}\", \"parse_mode\": \"HTML\"}")
+            
+            echo "📬 Telegram ответ: $TG_RESPONSE"
+            
+            # Помечаем задачу как отправленную
+            curl -s -X PATCH \
+              "${SUPABASE_URL}/rest/v1/tasks?id=eq.${TASK_ID}" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: return=minimal" \
+              -d '{"reminder_sent": true}'
+            
+            echo "✅ Задача ${TASK_ID} помечена как отправленная"
+          done
+          
+          echo "🎉 Готово!"

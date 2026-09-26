@@ -3,7 +3,7 @@ import { Task, ViewMode, FilterStatus, FilterPriority } from './types';
 import { useTelegram } from './useTelegram';
 import { getGreeting } from './utils';
 import { loadTasks, createTask, updateTask, deleteTask, isSupabaseConfigured, supabase } from './supabase';
-import { createFamily, joinFamily, getUserFamily, checkAccess, addUserToWhitelist } from './supabase';
+import { createFamily, joinFamily, getUserFamily, checkAccess, addUserToWhitelist, checkAndSendReminders, sendTelegramNotification } from './supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
@@ -70,15 +70,20 @@ export default function App() {
           return;
         }
 
-        // Загружаем задачи
-        console.log('✅ Доступ разрешён, загружаю задачи...');
-        const userTasks = await loadTasks(String(telegramId));
-        setTasks(userTasks);
+      // Загружаем задачи
+      console.log('✅ Доступ разрешён, загружаю задачи...');
+      const userTasks = await loadTasks(String(telegramId));
+      setTasks(userTasks);
 
-        // Загружаем семью
-        const userFamily = await getUserFamily(String(telegramId));
-        setFamily(userFamily);
-      } else {
+      // Загружаем семью
+      const userFamily = await getUserFamily(String(telegramId));
+      setFamily(userFamily);
+
+      // Проверяем и отправляем просроченные напоминания
+      const remindersSent = await checkAndSendReminders(String(telegramId));
+      if (remindersSent > 0) {
+        console.log(`🔔 Отправлено напоминаний: ${remindersSent}`);
+      }      } else {
         console.log('⚠️ Telegram пользователь не определён');
         console.log('💡 Откройте приложение через Telegram бота для полной функциональности');
         setIsAllowed(true); // Разрешаем доступ для тестирования в браузере
@@ -156,6 +161,19 @@ export default function App() {
       await updateTask(task.id, task);
     } else {
       await createTask(userId || undefined, task);
+    }
+
+    // Если у задачи есть напоминание и оно уже наступило — отправляем сразу
+    if (task.reminderDate && new Date(task.reminderDate) <= new Date()) {
+      console.log('🔔 Напоминание уже наступило, отправляю сразу...');
+      await sendTelegramNotification(
+        userId || '',
+        task.title,
+        task.description,
+        task.dueDate
+      );
+      // Помечаем как отправленное
+      await updateTask(task.id, { ...task, reminderSent: true });
     }
 
     const userTasks = await loadTasks(userId || undefined);
