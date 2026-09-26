@@ -41,13 +41,13 @@ serve(async (req) => {
     let failedCount = 0
 
     for (const task of tasks) {
-      // Получаем информацию о пользователе отдельно
-      const { data: profile, error: profileError } = await supabase
+      // Получаем информацию о пользователе отдельно (без .single())
+      const { data: profiles, error: profileError } = await supabase
         .from('profiles')
         .select('telegram_id, first_name')
         .eq('telegram_id', task.user_id)
-        .single()
 
+      const profile = profiles && profiles.length > 0 ? profiles[0] : null
       const telegramId = profile?.telegram_id
       const userName = profile?.first_name || 'Пользователь'
 
