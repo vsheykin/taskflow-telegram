@@ -12,8 +12,5 @@ jobs:
       - name: Call Supabase Edge Function
         run: |
           curl -X POST https://fgyyzyruhwdbvzvtojoy.supabase.co/functions/v1/send-reminders \
-            -H 'Authorization: Bearer ${{ secrets.SUPABASE_PUBLISHABLE_KEY}}' \
-            -H 'apikey: ${{ secrets.SUPABASE_PUBLISHABLE_KEY}}' \
-            -H 'Content-Type: application/json' \
-            --data '{"name":"Functions"}'
-
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json"
