@@ -176,6 +176,34 @@ export default function App() {
     };
   }, [userId]);
 
+  // Периодическая проверка напоминаний (каждые 30 секунд)
+  useEffect(() => {
+    if (!userId) return;
+
+    console.log('⏰ Запускаю периодическую проверку напоминаний...');
+    
+    const checkReminders = async () => {
+      const remindersSent = await checkAndSendReminders(userId);
+      if (remindersSent > 0) {
+        console.log(`🔔 Отправлено напоминаний: ${remindersSent}`);
+        // Перезагружаем задачи после отправки напоминаний
+        const userTasks = await loadTasks(userId);
+        setTasks(userTasks);
+      }
+    };
+
+    // Проверяем сразу при запуске
+    checkReminders();
+
+    // Затем проверяем каждые 30 секунд
+    const intervalId = setInterval(checkReminders, 30000);
+
+    return () => {
+      console.log('⏰ Останавливаю периодическую проверку напоминаний');
+      clearInterval(intervalId);
+    };
+  }, [userId]);
+
   // Filter tasks
   const filteredTasks = tasks.filter(task => {
     if (statusFilter !== 'all' && task.status !== statusFilter) return false;

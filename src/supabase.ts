@@ -576,17 +576,24 @@ export async function sendTelegramNotification(
     const safeTitle = escapeHtml(title);
     const safeDescription = description ? escapeHtml(description) : '';
 
-    const message = `${reminderText || '🔔'} <b>Напоминание о задаче</b>\n\n` +
-      `📝 <b>${safeTitle}</b>` +
-      (safeDescription ? `\n\n${safeDescription}` : '') +
-      (dueDate ? `\n\n⏰ Дедлайн: ${new Date(dueDate).toLocaleString('ru-RU', { 
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // Форматируем дату дедлайна в локальное время пользователя
+    let dueDateFormatted = '';
+    if (dueDate) {
+      const date = new Date(dueDate);
+      dueDateFormatted = date.toLocaleString('ru-RU', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
-        minute: '2-digit'
-      })}` : '');
+        minute: '2-digit',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
+    }
+
+    const message = `${reminderText || '🔔'} <b>Напоминание о задаче</b>\n\n` +
+      `📝 <b>${safeTitle}</b>` +
+      (safeDescription ? `\n\n${safeDescription}` : '') +
+      (dueDateFormatted ? `\n\n⏰ Дедлайн: ${dueDateFormatted}` : '');
 
     console.log('  Сообщение:', message.substring(0, 100) + '...');
 
@@ -656,23 +663,16 @@ export async function checkAndSendReminders(userId: string): Promise<number> {
     const tasksToRemind = tasks.filter((task: any) => {
       if (!task.reminder_date) return false;
       
-      // Парсим дату как локальное время (добавляем часовой пояс если его нет)
-      let reminderTime: Date;
-      if (task.reminder_date.includes('Z') || task.reminder_date.includes('+') || task.reminder_date.match(/-\d{2}:\d{2}$/)) {
-        // Уже с часовым поясом
-        reminderTime = new Date(task.reminder_date);
-      } else {
-        // Без часового пояса - добавляем локальный
-        reminderTime = new Date(task.reminder_date + 'Z');
-      }
+      // Парсим дату - теперь все даты в UTC формате
+      const reminderTime = new Date(task.reminder_date);
       
       const reminderCount = task.reminder_count || 0;
       const lastSentAt = task.last_reminder_sent_at ? new Date(task.last_reminder_sent_at) : null;
       
       console.log(`🔍 Проверка задачи "${task.title}":`);
-      console.log(`  reminder_date: ${task.reminder_date}`);
-      console.log(`  reminderTime: ${reminderTime.toISOString()}`);
-      console.log(`  now: ${now.toISOString()}`);
+      console.log(`  reminder_date (UTC): ${task.reminder_date}`);
+      console.log(`  reminderTime (UTC): ${reminderTime.toISOString()}`);
+      console.log(`  now (UTC): ${now.toISOString()}`);
       console.log(`  reminderCount: ${reminderCount}`);
       console.log(`  reminderTime <= now: ${reminderTime <= now}`);
       

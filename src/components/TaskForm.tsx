@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Task, Priority, Status, Category, TaskScope } from '../types';
 import { generateId } from '../store';
-import { toLocalISOString } from '../utils';
+import { toLocalISOString, utcToLocal, localToUTC } from '../utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trash2, Calendar, Bell, Tag, User, Users } from 'lucide-react';
 
@@ -37,14 +37,13 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       console.log('  task.dueDate:', task.dueDate);
       console.log('  task.reminderDate:', task.reminderDate);
       
-      // Даты хранятся в локальном времени, просто берём первые 16 символов для input
-      // "2026-09-26T17:00:00" -> "2026-09-26T17:00"
-      setDueDate(task.dueDate ? task.dueDate.substring(0, 16) : '');
-      setReminderDate(task.reminderDate ? task.reminderDate.substring(0, 16) : '');
+      // Конвертируем UTC даты из БД в локальное время для input
+      setDueDate(task.dueDate ? utcToLocal(task.dueDate) : '');
+      setReminderDate(task.reminderDate ? utcToLocal(task.reminderDate) : '');
       setTags(task.tags.join(', '));
       
-      console.log('  dueDate для input:', task.dueDate ? task.dueDate.substring(0, 16) : '');
-      console.log('  reminderDate для input:', task.reminderDate ? task.reminderDate.substring(0, 16) : '');
+      console.log('  dueDate для input:', task.dueDate ? utcToLocal(task.dueDate) : '');
+      console.log('  reminderDate для input:', task.reminderDate ? utcToLocal(task.reminderDate) : '');
     }
   }, [task]);
 
@@ -55,13 +54,7 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
     console.log('  dueDate из input:', dueDate);
     console.log('  reminderDate из input:', reminderDate);
 
-    // input type="datetime-local" возвращает строку в формате "YYYY-MM-DDTHH:mm"
-    // Это уже локальное время, просто добавляем секунды для ISO формата
-    const formatDateTime = (dateTimeStr: string): string => {
-      // "2026-09-26T17:00" -> "2026-09-26T17:00:00"
-      return dateTimeStr.length === 16 ? `${dateTimeStr}:00` : dateTimeStr;
-    };
-
+    // Конвертируем локальное время из input в UTC для сохранения в БД
     const savedTask: Task = {
       id: task?.id || generateId(),
       title: title.trim(),
@@ -71,9 +64,9 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       category,
       scope,
       createdAt: task?.createdAt || new Date().toISOString(),
-      // Сохраняем как есть (уже в локальном времени)
-      dueDate: dueDate ? formatDateTime(dueDate) : null,
-      reminderDate: reminderDate ? formatDateTime(reminderDate) : null,
+      // Конвертируем локальное время в UTC
+      dueDate: dueDate ? localToUTC(dueDate) : null,
+      reminderDate: reminderDate ? localToUTC(reminderDate) : null,
       reminderSent: task?.reminderSent || false,
       reminderCount: task?.reminderCount || 0,
       lastReminderSentAt: task?.lastReminderSentAt || null,
@@ -81,7 +74,9 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
     };
 
-    console.log('  Сохранённая задача:', savedTask);
+    console.log('  Сохранённая задача (UTC):', savedTask);
+    console.log('  dueDate UTC:', savedTask.dueDate);
+    console.log('  reminderDate UTC:', savedTask.reminderDate);
     onSave(savedTask);
   };
 
