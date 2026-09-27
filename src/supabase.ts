@@ -555,8 +555,12 @@ export async function sendTelegramNotification(
   dueDate?: string | null,
   reminderText?: string
 ): Promise<boolean> {
+  console.log('📤 Отправка уведомления в Telegram...');
+  console.log('  chat_id:', chatId);
+  console.log('  TELEGRAM_BOT_TOKEN установлен:', !!TELEGRAM_BOT_TOKEN);
+  
   if (!TELEGRAM_BOT_TOKEN) {
-    console.warn('⚠️ TELEGRAM_BOT_TOKEN не установлен');
+    console.error('❌ TELEGRAM_BOT_TOKEN не установлен!');
     return false;
   }
 
@@ -584,6 +588,8 @@ export async function sendTelegramNotification(
         minute: '2-digit'
       })}` : '');
 
+    console.log('  Сообщение:', message.substring(0, 100) + '...');
+
     const response = await fetch(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
@@ -597,16 +603,18 @@ export async function sendTelegramNotification(
       }
     );
 
+    const responseData = await response.json();
+    console.log('  Telegram API ответ:', responseData);
+
     if (response.ok) {
-      console.log('✅ Уведомление отправлено в Telegram');
+      console.log('✅ Уведомление успешно отправлено в Telegram');
       return true;
     } else {
-      const errorData = await response.json();
-      console.error('❌ Ошибка отправки в Telegram:', errorData);
+      console.error('❌ Ошибка отправки в Telegram:', responseData);
       return false;
     }
   } catch (err) {
-    console.error('❌ Ошибка отправки уведомления:', err);
+    console.error('❌ Исключение при отправке уведомления:', err);
     return false;
   }
 }
@@ -642,16 +650,35 @@ export async function checkAndSendReminders(userId: string): Promise<number> {
       return 0;
     }
 
+    console.log('📊 Всего задач с напоминаниями:', tasks.length);
+
     // Фильтруем задачи, которым нужно отправить напоминание
     const tasksToRemind = tasks.filter((task: any) => {
       if (!task.reminder_date) return false;
       
-      const reminderTime = new Date(task.reminder_date);
+      // Парсим дату как локальное время (добавляем часовой пояс если его нет)
+      let reminderTime: Date;
+      if (task.reminder_date.includes('Z') || task.reminder_date.includes('+') || task.reminder_date.match(/-\d{2}:\d{2}$/)) {
+        // Уже с часовым поясом
+        reminderTime = new Date(task.reminder_date);
+      } else {
+        // Без часового пояса - добавляем локальный
+        reminderTime = new Date(task.reminder_date + 'Z');
+      }
+      
       const reminderCount = task.reminder_count || 0;
       const lastSentAt = task.last_reminder_sent_at ? new Date(task.last_reminder_sent_at) : null;
       
+      console.log(`🔍 Проверка задачи "${task.title}":`);
+      console.log(`  reminder_date: ${task.reminder_date}`);
+      console.log(`  reminderTime: ${reminderTime.toISOString()}`);
+      console.log(`  now: ${now.toISOString()}`);
+      console.log(`  reminderCount: ${reminderCount}`);
+      console.log(`  reminderTime <= now: ${reminderTime <= now}`);
+      
       // Первое напоминание
       if (reminderCount === 0 && reminderTime <= now) {
+        console.log(`  ✅ Первое напоминание`);
         return true;
       }
       
@@ -664,7 +691,9 @@ export async function checkAndSendReminders(userId: string): Promise<number> {
         const timeSinceLastSent = now.getTime() - lastSentAt.getTime();
         const requiredInterval = (REMINDER_INTERVALS[reminderCount] - REMINDER_INTERVALS[reminderCount - 1]) * 60000;
         
-        return timeSinceLastSent >= requiredInterval && now >= nextReminderTime;
+        const shouldRemind = timeSinceLastSent >= requiredInterval && now >= nextReminderTime;
+        console.log(`  ✅ Повторное напоминание #${reminderCount + 1}: ${shouldRemind}`);
+        return shouldRemind;
       }
       
       return false;

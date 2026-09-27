@@ -32,15 +32,35 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       setStatus(task.status);
       setCategory(task.category);
       setScope(task.scope || 'personal');
-      // Конвертируем из UTC в локальное время для отображения
-      setDueDate(task.dueDate ? toLocalISOString(new Date(task.dueDate)) : '');
-      setReminderDate(task.reminderDate ? toLocalISOString(new Date(task.reminderDate)) : '');
+      
+      console.log('📝 Загрузка задачи для редактирования:');
+      console.log('  task.dueDate:', task.dueDate);
+      console.log('  task.reminderDate:', task.reminderDate);
+      
+      // Даты хранятся в локальном времени, просто берём первые 16 символов для input
+      // "2026-09-26T17:00:00" -> "2026-09-26T17:00"
+      setDueDate(task.dueDate ? task.dueDate.substring(0, 16) : '');
+      setReminderDate(task.reminderDate ? task.reminderDate.substring(0, 16) : '');
       setTags(task.tags.join(', '));
+      
+      console.log('  dueDate для input:', task.dueDate ? task.dueDate.substring(0, 16) : '');
+      console.log('  reminderDate для input:', task.reminderDate ? task.reminderDate.substring(0, 16) : '');
     }
   }, [task]);
 
   const handleSave = () => {
     if (!title.trim()) return;
+
+    console.log('💾 Сохранение задачи...');
+    console.log('  dueDate из input:', dueDate);
+    console.log('  reminderDate из input:', reminderDate);
+
+    // input type="datetime-local" возвращает строку в формате "YYYY-MM-DDTHH:mm"
+    // Это уже локальное время, просто добавляем секунды для ISO формата
+    const formatDateTime = (dateTimeStr: string): string => {
+      // "2026-09-26T17:00" -> "2026-09-26T17:00:00"
+      return dateTimeStr.length === 16 ? `${dateTimeStr}:00` : dateTimeStr;
+    };
 
     const savedTask: Task = {
       id: task?.id || generateId(),
@@ -51,9 +71,9 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       category,
       scope,
       createdAt: task?.createdAt || new Date().toISOString(),
-      // Сохраняем в локальном времени
-      dueDate: dueDate ? toLocalISOString(new Date(dueDate)) : null,
-      reminderDate: reminderDate ? toLocalISOString(new Date(reminderDate)) : null,
+      // Сохраняем как есть (уже в локальном времени)
+      dueDate: dueDate ? formatDateTime(dueDate) : null,
+      reminderDate: reminderDate ? formatDateTime(reminderDate) : null,
       reminderSent: task?.reminderSent || false,
       reminderCount: task?.reminderCount || 0,
       lastReminderSentAt: task?.lastReminderSentAt || null,
@@ -61,6 +81,7 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
     };
 
+    console.log('  Сохранённая задача:', savedTask);
     onSave(savedTask);
   };
 
