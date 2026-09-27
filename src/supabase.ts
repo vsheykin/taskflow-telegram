@@ -109,6 +109,8 @@ export async function loadTasks(userId?: string, familyMemberIds?: string[]): Pr
       dueDate: task.due_date,
       reminderDate: task.reminder_date,
       reminderSent: task.reminder_sent,
+      reminderCount: task.reminder_count || 0,
+      lastReminderSentAt: task.last_reminder_sent_at,
       completedAt: task.completed_at,
       tags: task.task_tags?.map((t: any) => t.tag) || [],
     }));
@@ -145,6 +147,7 @@ export async function createTask(userId: string | undefined, task: Omit<Task, 'i
         scope: task.scope || 'personal',
         due_date: task.dueDate,
         reminder_date: task.reminderDate,
+        reminder_count: 0,
         completed_at: task.completedAt,
       })
       .select()
@@ -171,6 +174,8 @@ export async function createTask(userId: string | undefined, task: Omit<Task, 'i
       dueDate: data.due_date,
       reminderDate: data.reminder_date,
       reminderSent: data.reminder_sent,
+      reminderCount: data.reminder_count || 0,
+      lastReminderSentAt: data.last_reminder_sent_at,
       completedAt: data.completed_at,
       tags: task.tags,
     };
@@ -209,6 +214,9 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
     if (updates.scope !== undefined) dbUpdates.scope = updates.scope;
     if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
     if (updates.reminderDate !== undefined) dbUpdates.reminder_date = updates.reminderDate;
+    if (updates.reminderSent !== undefined) dbUpdates.reminder_sent = updates.reminderSent;
+    if (updates.reminderCount !== undefined) dbUpdates.reminder_count = updates.reminderCount;
+    if (updates.lastReminderSentAt !== undefined) dbUpdates.last_reminder_sent_at = updates.lastReminderSentAt;
     if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt;
 
     const { error } = await supabase
@@ -544,7 +552,8 @@ export async function sendTelegramNotification(
   chatId: string | number,
   title: string,
   description?: string,
-  dueDate?: string | null
+  dueDate?: string | null,
+  reminderText?: string
 ): Promise<boolean> {
   if (!TELEGRAM_BOT_TOKEN) {
     console.warn('⚠️ TELEGRAM_BOT_TOKEN не установлен');
@@ -552,10 +561,21 @@ export async function sendTelegramNotification(
   }
 
   try {
-    const message = `🔔 <b>Напоминание о задаче</b>\n\n` +
-      `📝 <b>${title}</b>\n` +
-      (description ? `\n${description}\n` : '') +
-      (dueDate ? `\n⏰ Дедлайн: ${new Date(dueDate).toLocaleString('ru-RU', { 
+    // Экранируем HTML-спецсимволы в тексте задачи
+    const escapeHtml = (text: string) => {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    };
+
+    const safeTitle = escapeHtml(title);
+    const safeDescription = description ? escapeHtml(description) : '';
+
+    const message = `${reminderText || '🔔'} <b>Напоминание о задаче</b>\n\n` +
+      `📝 <b>${safeTitle}</b>` +
+      (safeDescription ? `\n\n${safeDescription}` : '') +
+      (dueDate ? `\n\n⏰ Дедлайн: ${new Date(dueDate).toLocaleString('ru-RU', { 
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         year: 'numeric',
         month: '2-digit',
@@ -591,6 +611,9 @@ export async function sendTelegramNotification(
   }
 }
 
+// Интервалы для повторных напоминаний (в минутах)
+const REMINDER_INTERVALS = [0, 30, 60, 480]; // Первое, +30мин, +1час, +8часов
+
 // Проверка и отправка просроченных напоминаний при загрузке приложения
 export async function checkAndSendReminders(userId: string): Promise<number> {
   if (!isSupabaseConfigured || !supabase || !TELEGRAM_BOT_TOKEN) {
@@ -602,11 +625,10 @@ export async function checkAndSendReminders(userId: string): Promise<number> {
     console.log('🔔 Проверяю просроченные напоминания...');
     const now = new Date();
 
-    // Получаем все неотправленные напоминания
+    // Получаем все задачи с напоминаниями
     const { data: tasks, error } = await supabase
       .from('tasks')
       .select('*')
-      .eq('reminder_sent', false)
       .in('status', ['new', 'in_progress'])
       .not('reminder_date', 'is', null);
 
@@ -620,36 +642,78 @@ export async function checkAndSendReminders(userId: string): Promise<number> {
       return 0;
     }
 
-    // Фильтруем задачи с просроченными напоминаниями (сравнение в локальном времени)
-    const overdueTasks = tasks.filter((task: any) => {
+    // Фильтруем задачи, которым нужно отправить напоминание
+    const tasksToRemind = tasks.filter((task: any) => {
       if (!task.reminder_date) return false;
+      
       const reminderTime = new Date(task.reminder_date);
-      return reminderTime <= now;
+      const reminderCount = task.reminder_count || 0;
+      const lastSentAt = task.last_reminder_sent_at ? new Date(task.last_reminder_sent_at) : null;
+      
+      // Первое напоминание
+      if (reminderCount === 0 && reminderTime <= now) {
+        return true;
+      }
+      
+      // Повторные напоминания
+      if (reminderCount > 0 && reminderCount < REMINDER_INTERVALS.length && lastSentAt) {
+        const nextInterval = REMINDER_INTERVALS[reminderCount];
+        const nextReminderTime = new Date(reminderTime.getTime() + nextInterval * 60000);
+        
+        // Проверяем, прошло ли достаточно времени с последней отправки
+        const timeSinceLastSent = now.getTime() - lastSentAt.getTime();
+        const requiredInterval = (REMINDER_INTERVALS[reminderCount] - REMINDER_INTERVALS[reminderCount - 1]) * 60000;
+        
+        return timeSinceLastSent >= requiredInterval && now >= nextReminderTime;
+      }
+      
+      return false;
     });
 
-    if (overdueTasks.length === 0) {
-      console.log('ℹ️ Нет просроченных напоминаний');
+    if (tasksToRemind.length === 0) {
+      console.log('ℹ️ Нет задач для напоминания');
       return 0;
     }
 
-    console.log(`📋 Найдено просроченных напоминаний: ${overdueTasks.length}`);
+    console.log(`📋 Найдено задач для напоминания: ${tasksToRemind.length}`);
 
     let sentCount = 0;
 
-    for (const task of overdueTasks) {
+    for (const task of tasksToRemind) {
+      const reminderCount = task.reminder_count || 0;
+      const intervalIndex = reminderCount < REMINDER_INTERVALS.length ? reminderCount : REMINDER_INTERVALS.length - 1;
+      const intervalMinutes = REMINDER_INTERVALS[intervalIndex];
+      
+      // Формируем текст напоминания
+      let reminderText = '';
+      if (reminderCount === 0) {
+        reminderText = '🔔';
+      } else if (reminderCount === 1) {
+        reminderText = '⏰ Повторное напоминание (+30 мин)';
+      } else if (reminderCount === 2) {
+        reminderText = '⏰ Повторное напоминание (+1 час)';
+      } else {
+        reminderText = '⏰ Финальное напоминание (+8 часов)';
+      }
+
       // Отправляем уведомление
       const sent = await sendTelegramNotification(
         task.user_id,
         task.title,
         task.description,
-        task.due_date
+        task.due_date,
+        reminderText
       );
 
       if (sent) {
-        // Помечаем как отправленное
+        // Обновляем счётчик и время последней отправки
         await supabase
           .from('tasks')
-          .update({ reminder_sent: true })
+          .update({
+            reminder_count: reminderCount + 1,
+            last_reminder_sent_at: now.toISOString(),
+            reminder_sent: reminderCount + 1 >= REMINDER_INTERVALS.length,
+          })
           .eq('id', task.id);
         sentCount++;
       }
@@ -661,4 +725,62 @@ export async function checkAndSendReminders(userId: string): Promise<number> {
     console.error('❌ Ошибка проверки напоминаний:', err);
     return 0;
   }
+}
+
+// Установка таймера для точного времени напоминания
+export function scheduleReminder(task: Task): number | null {
+  if (!task.reminderDate || !TELEGRAM_BOT_TOKEN) return null;
+  
+  const reminderTime = new Date(task.reminderDate);
+  const now = new Date();
+  const delay = reminderTime.getTime() - now.getTime();
+  
+  // Если время уже прошло - не устанавливаем таймер
+  if (delay <= 0) {
+    console.log('⏰ Время напоминания уже прошло');
+    return null;
+  }
+  
+  // Максимальный таймер - 24 часа (чтобы не было проблем с браузером)
+  const MAX_DELAY = 24 * 60 * 60 * 1000;
+  if (delay > MAX_DELAY) {
+    console.log('⏰ Напоминание слишком далеко (>24ч), будет проверено при следующем открытии');
+    return null;
+  }
+  
+  console.log(`⏰ Устанавливаю таймер напоминания через ${Math.round(delay / 1000)} секунд`);
+  
+  const timerId = window.setTimeout(async () => {
+    console.log('🔔 Таймер напоминания сработал!');
+    
+    // Отправляем уведомление
+    const sent = await sendTelegramNotification(
+      task.userId || '',
+      task.title,
+      task.description,
+      task.dueDate,
+      '🔔'
+    );
+    
+    if (sent && isSupabaseConfigured && supabase) {
+      // Обновляем в БД
+      await supabase
+        .from('tasks')
+        .update({
+          reminder_count: 1,
+          last_reminder_sent_at: new Date().toISOString(),
+        })
+        .eq('id', task.id);
+    }
+    
+    // Показываем локальное уведомление
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(`🔔 ${task.title}`, {
+        body: task.description || 'Напоминание о задаче',
+        icon: '/favicon.ico',
+      });
+    }
+  }, delay);
+  
+  return timerId;
 }

@@ -55,6 +55,8 @@ export default function TaskForm({ task, onSave, onDelete, onClose, hasFamily }:
       dueDate: dueDate ? toLocalISOString(new Date(dueDate)) : null,
       reminderDate: reminderDate ? toLocalISOString(new Date(reminderDate)) : null,
       reminderSent: task?.reminderSent || false,
+      reminderCount: task?.reminderCount || 0,
+      lastReminderSentAt: task?.lastReminderSentAt || null,
       completedAt: status === 'completed' ? new Date().toISOString() : null,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
     };
