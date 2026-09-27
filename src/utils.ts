@@ -1,9 +1,37 @@
 import { format, isToday, isTomorrow, isPast, differenceInDays, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
+// Конвертирует строку даты в Date объект, учитывая часовой пояс
+export function parseDateWithTimezone(dateStr: string | null): Date | null {
+  if (!dateStr) return null;
+  
+  // Если строка уже содержит часовой пояс (Z или +HH:MM), используем как есть
+  if (dateStr.includes('Z') || dateStr.match(/[+-]\d{2}:\d{2}$/)) {
+    return new Date(dateStr);
+  }
+  
+  // Иначе предполагаем, что это локальное время и конвертируем в UTC
+  const date = new Date(dateStr);
+  return date;
+}
+
+// Форматирует дату в локальное время пользователя
+export function formatToLocalDateTime(date: Date): string {
+  return date.toLocaleString('ru-RU', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  });
+}
+
 export function formatDate(dateStr: string | null): string {
   if (!dateStr) return '';
-  const date = parseISO(dateStr);
+  const date = parseDateWithTimezone(dateStr);
+  if (!date) return '';
+  
   if (isToday(date)) return 'Сегодня';
   if (isTomorrow(date)) return 'Завтра';
   return format(date, 'd MMMM', { locale: ru });
@@ -11,18 +39,25 @@ export function formatDate(dateStr: string | null): string {
 
 export function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return '';
-  const date = parseISO(dateStr);
-  return format(date, 'd MMMM, HH:mm', { locale: ru });
+  const date = parseDateWithTimezone(dateStr);
+  if (!date) return '';
+  
+  // Используем локальное время пользователя
+  return formatToLocalDateTime(date);
 }
 
 export function isOverdue(dateStr: string | null): boolean {
   if (!dateStr) return false;
-  return isPast(parseISO(dateStr));
+  const date = parseDateWithTimezone(dateStr);
+  if (!date) return false;
+  return isPast(date);
 }
 
 export function getDaysUntilDue(dateStr: string | null): number | null {
   if (!dateStr) return null;
-  return differenceInDays(parseISO(dateStr), new Date());
+  const date = parseDateWithTimezone(dateStr);
+  if (!date) return null;
+  return differenceInDays(date, new Date());
 }
 
 export function getDueDateLabel(dateStr: string | null): { text: string; color: string } {
@@ -44,6 +79,25 @@ export function toLocalISOString(date: Date): string {
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Конвертирует локальную дату из input в UTC строку для сохранения
+export function localToUTC(localDateStr: string): string {
+  if (!localDateStr) return '';
+  
+  // Создаём Date объект из локальной строки
+  const localDate = new Date(localDateStr);
+  
+  // Конвертируем в UTC ISO строку
+  return localDate.toISOString();
+}
+
+// Конвертирует UTC строку из БД в локальную строку для отображения в input
+export function utcToLocal(utcDateStr: string): string {
+  if (!utcDateStr) return '';
+  
+  const date = new Date(utcDateStr);
+  return toLocalISOString(date);
 }
 
 export function getGreeting(): string {
