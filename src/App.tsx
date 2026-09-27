@@ -47,6 +47,49 @@ export default function App() {
     const init = async () => {
       console.log('🚀 Инициализация приложения...');
       
+      // Проверяем тестовый режим через URL параметр
+      const urlParams = new URLSearchParams(window.location.search);
+      const testMode = urlParams.get('test') === '1';
+      const testUserId = urlParams.get('userId');
+      
+      if (testMode) {
+        console.log('🧪 ТЕСТОВЫЙ РЕЖИМ АКТИВИРОВАН');
+        const userId = testUserId || '271057229'; // Ваш Telegram ID по умолчанию
+        console.log('👤 Тестовый userId:', userId);
+        setUserId(userId);
+        setIsAllowed(true);
+        
+        // Запрашиваем разрешение на уведомления
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+
+        // Загружаем задачи
+        console.log('✅ Загружаю задачи в тестовом режиме...');
+        const userTasks = await loadTasks(userId);
+        setTasks(userTasks);
+
+        // Устанавливаем таймеры для будущих напоминаний
+        userTasks.forEach(task => {
+          if (task.reminderDate && !task.reminderSent) {
+            scheduleReminder(task);
+          }
+        });
+
+        // Загружаем семью
+        const userFamily = await getUserFamily(userId);
+        setFamily(userFamily);
+
+        // Проверяем и отправляем просроченные напоминания
+        const remindersSent = await checkAndSendReminders(userId);
+        if (remindersSent > 0) {
+          console.log(`🔔 Отправлено напоминаний: ${remindersSent}`);
+        }
+        
+        setLoading(false);
+        return;
+      }
+      
       // Получаем Telegram user ID
       const tg = window.Telegram?.WebApp;
       const telegramUser = tg?.initDataUnsafe?.user;
@@ -226,6 +269,33 @@ export default function App() {
 
     hapticSuccess();
   }, [tasks, userId, hapticSuccess]);
+
+  // Тестирование уведомлений
+  const handleTestNotification = async () => {
+    console.log('🧪 Тестирование уведомления...');
+    console.log('  userId:', userId);
+    
+    if (!userId) {
+      alert('❌ userId не установлен');
+      return;
+    }
+
+    const success = await sendTelegramNotification(
+      userId,
+      '🧪 Тестовое уведомление',
+      'Это тестовое сообщение для проверки работы уведомлений',
+      new Date().toISOString(),
+      '🔔'
+    );
+
+    if (success) {
+      alert('✅ Уведомление отправлено! Проверьте Telegram');
+      hapticSuccess();
+    } else {
+      alert('❌ Ошибка отправки уведомления. Проверьте консоль (F12)');
+      hapticFeedback('heavy');
+    }
+  };
 
   const handleEditTask = useCallback((task: Task) => {
     setEditingTask(task);
@@ -416,6 +486,16 @@ export default function App() {
             </p>
           </div>
           <div className="flex items-center gap-1">
+            {/* Test notification button (only in test mode) */}
+            {new URLSearchParams(window.location.search).get('test') === '1' && (
+              <button
+                onClick={handleTestNotification}
+                className="p-2 rounded-lg bg-purple-100 text-purple-600 hover:bg-purple-200 transition-all"
+                title="Тестировать уведомление"
+              >
+                🔔
+              </button>
+            )}
             {/* Sync indicator */}
             <button
               onClick={() => setShowSyncInfo(!showSyncInfo)}
