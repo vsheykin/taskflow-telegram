@@ -3,7 +3,7 @@ import { Task, ViewMode, FilterStatus, FilterPriority } from './types';
 import { useTelegram } from './useTelegram';
 import { getGreeting } from './utils';
 import { loadTasks, createTask, updateTask, deleteTask, isSupabaseConfigured, supabase } from './supabase';
-import { createFamily, joinFamily, getUserFamily, checkAccess, addUserToWhitelist, checkAndSendReminders, sendTelegramNotification } from './supabase';
+import { createFamily, joinFamily, getUserFamily, checkAccess, addUserToWhitelist, checkAndSendReminders, sendTelegramNotification, scheduleReminder } from './supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus,
@@ -70,10 +70,22 @@ export default function App() {
           return;
         }
 
+      // Запрашиваем разрешение на уведомления
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
       // Загружаем задачи
       console.log('✅ Доступ разрешён, загружаю задачи...');
       const userTasks = await loadTasks(String(telegramId));
       setTasks(userTasks);
+
+      // Устанавливаем таймеры для будущих напоминаний
+      userTasks.forEach(task => {
+        if (task.reminderDate && !task.reminderSent) {
+          scheduleReminder(task);
+        }
+      });
 
       // Загружаем семью
       const userFamily = await getUserFamily(String(telegramId));

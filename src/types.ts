@@ -16,6 +16,8 @@ export interface Task {
   dueDate: string | null;
   reminderDate: string | null;
   reminderSent: boolean;
+  reminderCount?: number;
+  lastReminderSentAt?: string | null;
   completedAt: string | null;
   tags: string[];
 }

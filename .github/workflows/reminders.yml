@@ -51,7 +51,7 @@ jobs:
             exit 0
           fi
           
-          # Отправляем уведомления (простая обработка через jq)
+          # Отправляем уведомления через jq для правильного JSON
           echo "$RESPONSE" | jq -c '.[]' | while read -r task; do
             TASK_ID=$(echo "$task" | jq -r '.id')
             TITLE=$(echo "$task" | jq -r '.title')
@@ -60,30 +60,37 @@ jobs:
             
             echo "📤 Отправляю напоминание для задачи: $TITLE (user: $USER_ID)"
             
-            # Формируем сообщение
-            MESSAGE="🔔 <b>Напоминание о задаче</b>%0A%0A📝 <b>${TITLE}</b>"
+            # Формируем сообщение через jq для правильного JSON с переносами строк
             if [ -n "$DESCRIPTION" ]; then
-              MESSAGE="${MESSAGE}%0A%0A${DESCRIPTION}"
+              MESSAGE=$(jq -n --arg title "$TITLE" --arg desc "$DESCRIPTION" \
+                "🔔 <b>Напоминание о задаче</b>\n\n📝 <b>\($title)</b>\n\n\($desc)")
+            else
+              MESSAGE=$(jq -n --arg title "$TITLE" \
+                "🔔 <b>Напоминание о задаче</b>\n\n📝 <b>\($title)</b>")
             fi
             
             # Отправляем в Telegram
             TG_RESPONSE=$(curl -s -X POST \
               "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               -H "Content-Type: application/json" \
-              -d "{\"chat_id\": \"${USER_ID}\", \"text\": \"${MESSAGE}\", \"parse_mode\": \"HTML\"}")
+              -d "$(jq -n --arg chat_id "$USER_ID" --arg text "$MESSAGE" \
+                '{chat_id: $chat_id, text: $text, parse_mode: "HTML"}')")
             
             echo "📬 Telegram ответ: $TG_RESPONSE"
             
-            # Помечаем задачу как отправленную
+            # Обновляем счётчик напоминаний
+            CURRENT_COUNT=$(echo "$task" | jq -r '.reminder_count // 0')
+            NEW_COUNT=$((CURRENT_COUNT + 1))
+            
             curl -s -X PATCH \
               "${SUPABASE_URL}/rest/v1/tasks?id=eq.${TASK_ID}" \
               -H "apikey: ${SUPABASE_ANON_KEY}" \
               -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
               -H "Content-Type: application/json" \
               -H "Prefer: return=minimal" \
-              -d '{"reminder_sent": true}'
+              -d "{\"reminder_count\": ${NEW_COUNT}, \"last_reminder_sent_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
             
-            echo "✅ Задача ${TASK_ID} помечена как отправленная"
+            echo "✅ Задача ${TASK_ID} обновлена (reminder_count: ${NEW_COUNT})"
           done
           
           echo "🎉 Готово!"
